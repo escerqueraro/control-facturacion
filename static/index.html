@@ -151,6 +151,10 @@
               <span id="userBadge" class="text-[10px] font-bold px-2 py-0.5 rounded-full border"></span>
               <span id="liveStatusBadge" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                 <span class="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+              <span id="saveStatusIndicator" class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                <i id="saveStatusIcon" class="fa-solid fa-check text-emerald-600"></i>
+                <span id="saveStatusText">Guardado</span>
+              </span>
                 <span>En Vivo</span>
               </span>
             </div>
@@ -713,21 +717,97 @@
       document.getElementById("passwordInput").value = "";
     }
 
-    // Load Clients Data from Backend
+    // Visual Save Status Helper
+    function setSaveStatus(status, text) {
+      const ind = document.getElementById("saveStatusIndicator");
+      const icon = document.getElementById("saveStatusIcon");
+      const txt = document.getElementById("saveStatusText");
+      if (!ind || !icon || !txt) return;
+
+      if (status === "saving") {
+        ind.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-50 text-amber-700 border border-amber-200";
+        icon.className = "fa-solid fa-spinner fa-spin text-amber-600";
+        txt.innerText = text || "Guardando...";
+      } else if (status === "error") {
+        ind.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-rose-50 text-rose-700 border border-rose-200";
+        icon.className = "fa-solid fa-circle-exclamation text-rose-600";
+        txt.innerText = text || "Error al sincronizar";
+      } else {
+        ind.className = "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200";
+        icon.className = "fa-solid fa-check text-emerald-600";
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        txt.innerText = `Guardado (${timeStr})`;
+      }
+    }
+
+    // Debounce timer for text inputs so every keystroke saves automatically after 350ms
+    let debounceTimers = {};
+    function debounceField(clientId, field, value) {
+      setSaveStatus("saving");
+      clearTimeout(debounceTimers[clientId + "_" + field]);
+      debounceTimers[clientId + "_" + field] = setTimeout(() => {
+        updateField(clientId, field, value);
+      }, 350);
+    }
+
+    // Load Clients Data from Backend with Offline-First LocalStorage Sync
     async function loadClients() {
       try {
         const res = await fetch(`/api/clients?period=${activePeriod}`);
         if (res.ok) {
           const data = await res.json();
           clientsData = data.clients;
+
+          // Check if localStorage has newer cached edits (in case server redeployed/restarted)
+          const cacheKey = "facturacion_cache_" + activePeriod;
+          const cachedRaw = localStorage.getItem(cacheKey);
+          if (cachedRaw) {
+            try {
+              const cachedList = JSON.parse(cachedRaw);
+              cachedList.forEach(localC => {
+                const srvC = clientsData.find(c => c.id === localC.id);
+                if (srvC) {
+                  ["step1", "step1_date", "step2", "step2_oc", "step3", "step3_fac", "step4", "step4_date"].forEach(f => {
+                    // If local cache has data that server lacks, restore and sync to server!
+                    if (localC[f] && !srvC[f]) {
+                      srvC[f] = localC[f];
+                      srvC.updated_by = localC.updated_by || "Restaurado";
+                      fetch("/api/update", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          client_id: srvC.id,
+                          period: activePeriod,
+                          field: f,
+                          value: localC[f],
+                          updated_by: srvC.updated_by
+                        })
+                      }).catch(() => {});
+                    }
+                  });
+                }
+              });
+            } catch (e) {}
+          }
+
           renderTable();
           updateKPIs();
+          setSaveStatus("saved");
         }
       } catch (err) {
-        console.warn("Backend API error, loading local data fallback", err);
+        console.warn("Backend API error, loading from local cache fallback", err);
+        const cacheKey = "facturacion_cache_" + activePeriod;
+        const cachedRaw = localStorage.getItem(cacheKey);
+        if (cachedRaw) {
+          try {
+            clientsData = JSON.parse(cachedRaw);
+            renderTable();
+            updateKPIs();
+          } catch(e) {}
+        }
       }
     }
-
     // WebSocket Setup for Realtime Broadcasts
     function setupWebSocket() {
       const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -923,7 +1003,7 @@
                   <span id="label-step2-${c.id}" class="text-xs font-semibold ${c.step2 ? 'text-amber-800' : 'text-slate-500'}">OC / Aprobación</span>
                 </label>
                 <div class="flex items-center gap-1">
-                  <input type="text" id="text-oc-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Nº OC / HES" value="${c.step2_oc || ''}" onchange="updateField(${c.id}, 'step2_oc', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                  <input type="text" id="text-oc-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Nº OC / HES" value="${c.step2_oc || ''}" oninput="debounceField(${c.id}, 'step2_oc', this.value)" onchange="updateField(${c.id}, 'step2_oc', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-amber-500">
                 </div>
               </div>
             ` : '<span class="text-[11px] text-slate-400 italic">No Requiere OC Previa</span>'}
@@ -937,7 +1017,7 @@
                 <span id="label-step3-${c.id}" class="text-xs font-semibold ${c.step3 ? 'text-emerald-800' : 'text-slate-500'}">Factura Generada</span>
               </label>
               <div>
-                <input type="text" id="text-fac-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Nº Factura(s)" value="${c.step3_fac || ''}" onchange="updateField(${c.id}, 'step3_fac', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                <input type="text" id="text-fac-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Nº Factura(s)" value="${c.step3_fac || ''}" oninput="debounceField(${c.id}, 'step3_fac', this.value)" onchange="updateField(${c.id}, 'step3_fac', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500">
               </div>
             </div>
           </td>
@@ -986,6 +1066,10 @@
       // Update in-memory state
       client[field] = value;
       client.updated_by = currentUser.name;
+      const now = new Date();
+      client.updated_at = now.toISOString();
+
+      setSaveStatus("saving");
 
       // Smart behavior: If user enters a date for step 1, automatically check Informe Enviado!
       if (field === "step1_date" && value) {
@@ -1029,9 +1113,14 @@
       updateClientStatusBadge(client);
       updateKPIs();
 
+      // ALWAYS backup immediately to browser's LocalStorage!
+      try {
+        localStorage.setItem("facturacion_cache_" + activePeriod, JSON.stringify(clientsData));
+      } catch(e) {}
+
       // Send to server
       try {
-        await fetch("/api/update", {
+        const res = await fetch("/api/update", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -1042,11 +1131,17 @@
             updated_by: currentUser.name
           })
         });
+
+        if (res.ok) {
+          setSaveStatus("saved");
+        } else {
+          setSaveStatus("error", "Error servidor");
+        }
       } catch (err) {
-        console.log("Servidor local no disponible, cambio guardado en memoria del navegador.");
+        // If offline, saved to localStorage anyway!
+        setSaveStatus("saved", "Guardado local");
       }
     }
-
     // Update KPI counters
     function updateKPIs() {
       let done = 0, waiting = 0, pending = 0;
