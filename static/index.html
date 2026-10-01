@@ -312,10 +312,10 @@
                 <th class="p-3 min-w-[220px]">Cliente & Corte</th>
                 <th class="p-3 text-center min-w-[90px]">Resp.</th>
                 <!-- Step 1 -->
-                <th class="p-3 min-w-[170px] bg-sky-50 text-sky-900 border-x border-sky-100">
+                <th class="p-3 min-w-[220px] bg-sky-50 text-sky-900 border-x border-sky-100">
                   <div class="flex items-center gap-1.5">
                     <span class="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[10px]">1</span>
-                    <span>Envío Informe</span>
+                    <span>Informe & Pre-Factura</span>
                   </div>
                 </th>
                 <!-- Step 2 -->
@@ -326,10 +326,10 @@
                   </div>
                 </th>
                 <!-- Step 3 -->
-                <th class="p-3 min-w-[180px] bg-emerald-50 text-emerald-900 border-r border-emerald-100">
+                <th class="p-3 min-w-[240px] bg-emerald-50 text-emerald-900 border-r border-emerald-100">
                   <div class="flex items-center gap-1.5">
                     <span class="w-5 h-5 rounded-full bg-emerald-600 text-white flex items-center justify-center text-[10px]">3</span>
-                    <span>Facturación</span>
+                    <span>Factura & Valores</span>
                   </div>
                 </th>
                 <!-- Step 4 -->
@@ -846,13 +846,59 @@
       }
     }
 
+    // Helper formatting for currency and math comparisons
+    function formatMoneyCOP(num) {
+      if (isNaN(num)) return "$ 0";
+      return new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(num);
+    }
+
+    function parseMoneyCOP(val) {
+      if (!val) return 0;
+      const clean = String(val).replace(/[^0-9.-]/g, "");
+      return parseFloat(clean) || 0;
+    }
+
+    function renderDiffBadge(c) {
+      const pVal = parseMoneyCOP(c.pref_val);
+      const fVal = parseMoneyCOP(c.fac_val);
+
+      if (!pVal && !fVal) return "";
+
+      if (pVal > 0 && fVal > 0) {
+        const diff = fVal - pVal;
+        if (Math.abs(diff) < 1) {
+          return `<div class="mt-1 text-[10px] px-2 py-0.5 rounded bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 inline-flex items-center gap-1">
+            <i class="fa-solid fa-check"></i> Total Coincide (${formatMoneyCOP(fVal)})
+          </div>`;
+        } else if (diff > 0) {
+          return `<div class="mt-1 text-[10px] px-2 py-0.5 rounded bg-blue-100 text-blue-800 font-semibold border border-blue-200 inline-flex items-center gap-1" title="Factura excede a Pre-factura">
+            <i class="fa-solid fa-arrow-trend-up"></i> Dif: +${formatMoneyCOP(diff)}
+          </div>`;
+        } else {
+          return `<div class="mt-1 text-[10px] px-2 py-0.5 rounded bg-amber-100 text-amber-800 font-semibold border border-amber-200 inline-flex items-center gap-1" title="Factura menor que Pre-factura">
+            <i class="fa-solid fa-arrow-trend-down"></i> Dif: -${formatMoneyCOP(Math.abs(diff))}
+          </div>`;
+        }
+      } else if (pVal > 0 && (!fVal || fVal === 0)) {
+        return `<div class="mt-1 text-[10px] text-slate-500 font-medium">Pref: ${formatMoneyCOP(pVal)}</div>`;
+      } else if ((!pVal || pVal === 0) && fVal > 0) {
+        return `<div class="mt-1 text-[10px] text-slate-500 font-medium">Fac: ${formatMoneyCOP(fVal)}</div>`;
+      }
+      return "";
+    }
+
     // Update Client Status Badge & Row UI in place without destroying DOM
     function updateClientStatusBadge(client) {
       const badge = document.getElementById(`status-badge-${client.id}`);
-      if (!badge) return;
-      const st = computeStatus(client);
-      badge.className = `inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.cls} shadow-2xs`;
-      badge.innerText = st.text;
+      if (badge) {
+        const st = computeStatus(client);
+        badge.className = `inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.cls} shadow-2xs`;
+        badge.innerText = st.text;
+      }
+      const diffEl = document.getElementById(`diff-badge-${client.id}`);
+      if (diffEl) {
+        diffEl.innerHTML = renderDiffBadge(client);
+      }
     }
 
     // Handle updates arriving from another user without re-rendering whole table
@@ -882,13 +928,25 @@
         } else if (data.field === "step2_oc") {
           const el = document.getElementById(`text-oc-${client.id}`);
           if (el && document.activeElement !== el) el.value = data.value || '';
+        } else if (data.field === "pref_num") {
+          const el = document.getElementById(`text-pref-num-${client.id}`);
+          if (el && document.activeElement !== el) el.value = data.value || '';
+        } else if (data.field === "pref_val") {
+          const el = document.getElementById(`text-pref-val-${client.id}`);
+          if (el && document.activeElement !== el) el.value = data.value || '';
         } else if (data.field === "step3") {
           const el = document.getElementById(`check-step3-${client.id}`);
           if (el) el.checked = !!data.value;
           const lbl = document.getElementById(`label-step3-${client.id}`);
           if (lbl) lbl.className = `text-xs font-semibold ${data.value ? 'text-emerald-800' : 'text-slate-500'}`;
+        } else if (data.field === "step3_date") {
+          const el = document.getElementById(`date-step3-${client.id}`);
+          if (el && document.activeElement !== el) el.value = data.value || '';
         } else if (data.field === "step3_fac") {
           const el = document.getElementById(`text-fac-${client.id}`);
+          if (el && document.activeElement !== el) el.value = data.value || '';
+        } else if (data.field === "fac_val") {
+          const el = document.getElementById(`text-fac-val-${client.id}`);
           if (el && document.activeElement !== el) el.value = data.value || '';
         } else if (data.field === "step4") {
           const el = document.getElementById(`check-step4-${client.id}`);
@@ -979,16 +1037,28 @@
             </span>
           </td>
 
-          <!-- Paso 1: Informe -->
+          <!-- Paso 1: Informe & Pre-Factura -->
           <td class="p-3 bg-sky-50/40 border-x border-sky-100">
             ${c.reqInf ? `
-              <div class="space-y-1">
+              <div class="space-y-1.5">
                 <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
                   <input type="checkbox" id="check-step1-${c.id}" ${isViewer ? 'disabled' : ''} onchange="updateField(${c.id}, 'step1', this.checked)" ${c.step1 ? 'checked' : ''} class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
                   <span id="label-step1-${c.id}" class="text-xs font-semibold ${c.step1 ? 'text-sky-800' : 'text-slate-500'}">Informe Enviado</span>
                 </label>
-                <div>
-                  <input type="date" id="date-step1-${c.id}" ${isViewer ? 'disabled' : ''} value="${c.step1_date || ''}" onchange="updateField(${c.id}, 'step1_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                <!-- Fecha Envío -->
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-500 w-12 font-medium">Fecha:</span>
+                  <input type="date" id="date-step1-${c.id}" ${isViewer ? 'disabled' : ''} value="${c.step1_date || ''}" onchange="updateField(${c.id}, 'step1_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                </div>
+                <!-- Nº Pre-Factura -->
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-500 w-12 font-medium">Nº Pref:</span>
+                  <input type="text" id="text-pref-num-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Ej: PF-01, PF-02" value="${c.pref_num || ''}" oninput="debounceField(${c.id}, 'pref_num', this.value)" onchange="updateField(${c.id}, 'pref_num', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                </div>
+                <!-- Valor Pre-Factura -->
+                <div class="flex items-center gap-1.5">
+                  <span class="text-[10px] text-slate-500 w-12 font-medium">Valor $:</span>
+                  <input type="text" id="text-pref-val-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Valor prefactura" value="${c.pref_val || ''}" oninput="debounceField(${c.id}, 'pref_val', this.value)" onchange="updateField(${c.id}, 'pref_val', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-28 font-mono focus:outline-none focus:ring-1 focus:ring-sky-500">
                 </div>
               </div>
             ` : '<span class="text-[11px] text-slate-400 italic">No Aplica</span>'}
@@ -1009,15 +1079,31 @@
             ` : '<span class="text-[11px] text-slate-400 italic">No Requiere OC Previa</span>'}
           </td>
 
-          <!-- Paso 3: Factura -->
+          <!-- Paso 3: Factura & Valores -->
           <td class="p-3 bg-emerald-50/40 border-r border-emerald-100">
-            <div class="space-y-1">
+            <div class="space-y-1.5">
               <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
                 <input type="checkbox" id="check-step3-${c.id}" ${isViewer ? 'disabled' : ''} onchange="updateField(${c.id}, 'step3', this.checked)" ${c.step3 ? 'checked' : ''} class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
                 <span id="label-step3-${c.id}" class="text-xs font-semibold ${c.step3 ? 'text-emerald-800' : 'text-slate-500'}">Factura Generada</span>
               </label>
-              <div>
-                <input type="text" id="text-fac-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Nº Factura(s)" value="${c.step3_fac || ''}" oninput="debounceField(${c.id}, 'step3_fac', this.value)" onchange="updateField(${c.id}, 'step3_fac', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-2 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+              <!-- Fecha Generación Factura -->
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-500 w-12 font-medium">F. Gen:</span>
+                <input type="date" id="date-step3-${c.id}" ${isViewer ? 'disabled' : ''} value="${c.step3_date || ''}" onchange="updateField(${c.id}, 'step3_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+              </div>
+              <!-- Nº Factura -->
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-500 w-12 font-medium">Nº Fac:</span>
+                <input type="text" id="text-fac-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Nº Factura(s)" value="${c.step3_fac || ''}" oninput="debounceField(${c.id}, 'step3_fac', this.value)" onchange="updateField(${c.id}, 'step3_fac', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+              </div>
+              <!-- Valor Factura -->
+              <div class="flex items-center gap-1.5">
+                <span class="text-[10px] text-slate-500 w-12 font-medium">Valor $:</span>
+                <input type="text" id="text-fac-val-${c.id}" ${isViewer ? 'disabled' : ''} placeholder="Valor factura" value="${c.fac_val || ''}" oninput="debounceField(${c.id}, 'fac_val', this.value)" onchange="updateField(${c.id}, 'fac_val', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-28 font-mono focus:outline-none focus:ring-1 focus:ring-emerald-500">
+              </div>
+              <!-- Comparativa de Valores (Informativo, sin bloquear) -->
+              <div id="diff-badge-${c.id}">
+                ${renderDiffBadge(c)}
               </div>
             </div>
           </td>
@@ -1071,15 +1157,14 @@
 
       setSaveStatus("saving");
 
-      // Smart behavior: If user enters a date for step 1, automatically check Informe Enviado!
-      if (field === "step1_date" && value) {
+      // Smart behavior 1: If user enters date or prefactura info, automatically check Informe Enviado!
+      if ((field === "step1_date" || field === "pref_num" || field === "pref_val") && value) {
         if (!client.step1) {
           client.step1 = true;
           const chk = document.getElementById(`check-step1-${clientId}`);
           if (chk) chk.checked = true;
           const lbl = document.getElementById(`label-step1-${clientId}`);
           if (lbl) lbl.className = "text-xs font-semibold text-sky-800";
-          // Also save step1 = true in background
           fetch("/api/update", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -1087,6 +1172,28 @@
               client_id: clientId,
               period: activePeriod,
               field: "step1",
+              value: true,
+              updated_by: currentUser.name
+            })
+          }).catch(() => {});
+        }
+      }
+
+      // Smart behavior 2: If user enters step3_date or fac_val, automatically check Factura Generada!
+      if ((field === "step3_date" || field === "fac_val") && value) {
+        if (!client.step3) {
+          client.step3 = true;
+          const chk = document.getElementById(`check-step3-${clientId}`);
+          if (chk) chk.checked = true;
+          const lbl = document.getElementById(`label-step3-${clientId}`);
+          if (lbl) lbl.className = "text-xs font-semibold text-emerald-800";
+          fetch("/api/update", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              client_id: clientId,
+              period: activePeriod,
+              field: "step3",
               value: true,
               updated_by: currentUser.name
             })
