@@ -260,8 +260,8 @@ def init_db():
                 f_type = "Mensual"
                 p_detail = "Mes Completo"
 
-            step1_def = 1 if not creq_inf else 0
-            step2_def = 1 if not creq_oc else 0
+            step1_def = 0
+            step2_def = 0
 
             cursor.execute("""
             INSERT INTO billing_records
@@ -908,8 +908,8 @@ async def create_record(req: CreateRecordRequest):
     new_id = f"rec_{req.client_id}_{uuid.uuid4().hex[:8]}"
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    step1_def = 1 if not c_meta["req_inf"] else 0
-    step2_def = 1 if not c_meta["req_oc"] else 0
+    step1_def = 0
+    step2_def = 0
 
     area_group_val = req.area_group.strip() if req.area_group else ""
     cursor.execute("""
@@ -1118,7 +1118,12 @@ async def upload_file(
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
-    cursor.execute(f"UPDATE billing_records SET {col_name} = ?, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
+    if doc_type == "report_doc":
+        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step1 = 1, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
+    elif doc_type == "fac_pdf":
+        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step3 = 1, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
+    else:
+        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
     conn.commit()
     conn.close()
 
@@ -1131,6 +1136,25 @@ async def upload_file(
         "updated_at": now_iso
     }
     await manager.broadcast(broadcast_data)
+
+    if doc_type == "report_doc":
+        await manager.broadcast({
+            "type": "RECORD_FIELD_UPDATED",
+            "record_id": record_id,
+            "field": "step1",
+            "value": True,
+            "updated_by": "Sistema (Archivo)",
+            "updated_at": now_iso
+        })
+    elif doc_type == "fac_pdf":
+        await manager.broadcast({
+            "type": "RECORD_FIELD_UPDATED",
+            "record_id": record_id,
+            "field": "step3",
+            "value": True,
+            "updated_by": "Sistema (Archivo)",
+            "updated_at": now_iso
+        })
 
     return {
         "success": True,
