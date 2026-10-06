@@ -6,7 +6,7 @@ import uuid
 from typing import List, Dict, Any, Optional
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, HTTPException, Depends, UploadFile, File, Form
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse, StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import io
@@ -182,6 +182,20 @@ def init_db():
     add_col_if_missing("billing_records", "fac_pdf_url", "TEXT DEFAULT ''")
     add_col_if_missing("billing_records", "report_doc_url", "TEXT DEFAULT ''")
     add_col_if_missing("system_users", "permissions", "TEXT DEFAULT 'total'")
+
+    # 6. File Archive Table (Persistent file storage across container restarts)
+    cursor.execute("""
+    CREATE TABLE IF NOT EXISTS uploaded_files_archive (
+        file_url TEXT PRIMARY KEY,
+        filename TEXT,
+        content_type TEXT,
+        file_bytes BLOB,
+        record_id TEXT,
+        doc_type TEXT,
+        created_at TEXT
+    )
+    """)
+    conn.commit()
 
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1118,6 +1132,13 @@ async def upload_file(
 
     conn = sqlite3.connect(DB_PATH)
     cursor = conn.cursor()
+    # Save binary into uploaded_files_archive table for persistent disaster recovery
+    cursor.execute("""
+    INSERT OR REPLACE INTO uploaded_files_archive
+    (file_url, filename, content_type, file_bytes, record_id, doc_type, created_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
+    """, (file_url, unique_name, file.content_type or 'application/octet-stream', content, record_id, doc_type, now_iso))
+
     if doc_type == "report_doc":
         cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step1 = 1, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
     elif doc_type == "fac_pdf":
@@ -1183,6 +1204,8 @@ async def delete_file(req: DeleteFileRequest):
     old_url = row[0] if row else ""
 
     cursor.execute(f"UPDATE billing_records SET {col_name} = '', updated_at = ? WHERE record_id = ?", (now_iso, req.record_id))
+    if old_url:
+        cursor.execute("DELETE FROM uploaded_files_archive WHERE file_url = ? OR filename = ?", (old_url, os.path.basename(old_url)))
     conn.commit()
     conn.close()
 
@@ -1264,13 +1287,15 @@ async def import_backup(data: dict):
         for r in data["billing_records"]:
             cursor.execute("""
             INSERT OR REPLACE INTO billing_records
-            (record_id, client_id, client_name, freq_type, month, period_detail, period_key, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, step4, step4_date, notes, updated_by, updated_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date, notes, updated_by, updated_at)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (
                 r.get("record_id"), r.get("client_id"), r.get("client_name"), r.get("freq_type"), r.get("month"), r.get("period_detail"),
-                r.get("period_key", "OCT_1Q"), 1 if r.get("step1") else 0, r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
+                r.get("period_key", "OCT_1Q"), r.get("area_group", ""),
+                1 if r.get("step1") else 0, r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
                 1 if r.get("step2") else 0, r.get("step2_oc", ""), r.get("step2_date", ""), r.get("oc_val", ""),
                 1 if r.get("step3") else 0, r.get("step3_fac", ""), r.get("step3_date", ""), r.get("fac_val", ""),
+                r.get("fac_pdf_url", ""), r.get("report_doc_url", ""),
                 1 if r.get("step4") else 0, r.get("step4_date", ""), r.get("notes", ""), r.get("updated_by", "Restauración"), now_iso
             ))
 
@@ -1329,14 +1354,15 @@ async def sync_client_cache(payload: dict):
             continue
         cursor.execute("""
         INSERT OR REPLACE INTO billing_records
-        (record_id, client_id, client_name, freq_type, month, period_detail, period_key, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, step4, step4_date, notes, updated_by, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date, notes, updated_by, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """, (
             rec_id, r.get("client_id"), r.get("client_name"), r.get("freq_type", "Mensual"), r.get("month", "Octubre"),
-            r.get("period_detail", "Mes Completo"), r.get("period_key", "OCT_1Q"),
+            r.get("period_detail", "Mes Completo"), r.get("period_key", "OCT_1Q"), r.get("area_group", ""),
             1 if r.get("step1") else 0, r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
             1 if r.get("step2") else 0, r.get("step2_oc", ""), r.get("step2_date", ""), r.get("oc_val", ""),
             1 if r.get("step3") else 0, r.get("step3_fac", ""), r.get("step3_date", ""), r.get("fac_val", ""),
+            r.get("fac_pdf_url", ""), r.get("report_doc_url", ""),
             1 if r.get("step4") else 0, r.get("step4_date", ""), r.get("notes", ""), r.get("updated_by", "AutoSync"), now_iso
         ))
         synced_count += 1
@@ -1473,6 +1499,31 @@ def export_excel(month: Optional[str] = "Octubre"):
 @app.get("/")
 def index():
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+
+# Serve Uploaded Documents (with Disaster Recovery from DB Archive)
+@app.get("/uploads/{filename}")
+def serve_uploaded_file(filename: str):
+    file_path = os.path.join(UPLOADS_DIR, filename)
+    if os.path.exists(file_path):
+        return FileResponse(file_path)
+
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("SELECT file_bytes, content_type FROM uploaded_files_archive WHERE filename = ? OR file_url = ?", (filename, f"/uploads/{filename}"))
+    row = cursor.fetchone()
+    conn.close()
+
+    if row and row[0]:
+        file_bytes = row[0]
+        content_type = row[1] or "application/octet-stream"
+        try:
+            with open(file_path, "wb") as f:
+                f.write(file_bytes)
+        except Exception:
+            pass
+        return Response(content=file_bytes, media_type=content_type)
+
+    raise HTTPException(status_code=404, detail="Archivo no encontrado")
 
 app.mount("/uploads", StaticFiles(directory=UPLOADS_DIR), name="uploads")
 app.mount("/", StaticFiles(directory=STATIC_DIR), name="static")

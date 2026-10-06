@@ -235,8 +235,19 @@
             <span class="hidden sm:inline">Mi Perfil</span>
           </button>
 
+          <!-- Backup / Restore Actions & Input -->
+          <input type="file" id="backupJsonInput" accept=".json" class="hidden" onchange="uploadBackupJSON(event)">
+          <button onclick="promptManualCacheRestore()" title="Recuperar datos de la memoria local protegida del navegador" class="px-3.5 py-2 text-xs font-bold rounded-xl bg-amber-500 hover:bg-amber-600 text-white shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+            <i class="fa-solid fa-clock-rotate-left"></i>
+            <span class="hidden sm:inline">Recuperar Memoria</span>
+          </button>
+
           <!-- Export Actions -->
           <div class="flex items-center gap-1.5">
+            <button onclick="downloadBackupJSON()" title="Descargar Copia de Seguridad completa en archivo JSON" class="px-3 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1.5 transition" title="Exportar Backup JSON">
+              <i class="fa-solid fa-cloud-arrow-down"></i>
+              <span class="hidden sm:inline">Copia JSON</span>
+            </button>
             <button onclick="downloadExcel()" title="Descargar libro Excel actualizado con fórmulas" class="px-3 py-2 text-xs font-semibold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm flex items-center gap-1.5 transition">
               <i class="fa-solid fa-file-excel"></i>
               <span class="hidden sm:inline">Exportar Excel</span>
@@ -1597,6 +1608,24 @@
       }
     }
 
+    // Helper to calculate how much real operational data exists in records
+    function countDataScore(recs) {
+      if (!Array.isArray(recs)) return 0;
+      let score = 0;
+      for (const r of recs) {
+        if (!r) continue;
+        if (r.step3_fac && String(r.step3_fac).trim()) score += 10;
+        if (r.pref_num && String(r.pref_num).trim()) score += 5;
+        if (r.pref_val && String(r.pref_val).trim()) score += 4;
+        if (r.fac_val && String(r.fac_val).trim()) score += 4;
+        if (r.step2_oc && String(r.step2_oc).trim()) score += 4;
+        if (r.fac_pdf_url || r.report_doc_url) score += 5;
+        if (r.notes && String(r.notes).trim()) score += 2;
+        if (r.step1_date || r.step2_date || r.step3_date || r.step4_date) score += 1;
+      }
+      return score;
+    }
+
     // Load Records from Backend (Consolidated Global View)
     async function loadRecords() {
       try {
@@ -1606,19 +1635,51 @@
           const data = await res.json();
           const rawRecs = data.records || [];
           const seenIds = new Set();
-          allRecords = rawRecs.filter(r => {
+          const serverRecs = rawRecs.filter(r => {
             if (!r || !r.record_id || seenIds.has(r.record_id)) return false;
             seenIds.add(r.record_id);
             return true;
           });
+
+          const serverScore = countDataScore(serverRecs);
+
+          // Check if local browser backup has data from past sessions
+          let localBackupRecs = null;
+          try {
+            const rawBackup = localStorage.getItem("facturacion_records_cache_backup") || localStorage.getItem("facturacion_records_cache");
+            if (rawBackup) localBackupRecs = JSON.parse(rawBackup);
+          } catch(e) {}
+
+          const localScore = countDataScore(localBackupRecs);
+
+          // CRITICAL ANTI-WIPE SHIELD:
+          // If server was restarted/spun down and has 0 data, but local browser has user records,
+          // DO NOT wipe! Instantly restore local data and re-sync to server!
+          if (localScore > 0 && serverScore === 0) {
+            console.warn("Anti-wipe shield triggered: Restoring from local browser vault...");
+            allRecords = localBackupRecs;
+            allClients = data.clients || [];
+            renderTable();
+            renderPrefacturasTable();
+            renderFacturasTable();
+            renderIndependentMatrixTable();
+            updateKPIs();
+            setSaveStatus("saving", "Restaurando datos locales...");
+            showToast("🛡️ Información recuperada de la memoria local y re-sincronizada en el servidor.");
+            await forceSyncLocalCache(true);
+            return;
+          }
+
+          allRecords = serverRecs;
           allClients = data.clients || [];
 
           try {
             localStorage.setItem("facturacion_records_cache", JSON.stringify(allRecords));
             localStorage.setItem("facturacion_clients_cache", JSON.stringify(allClients));
-            const hasData = allRecords.some(r => r.step3_fac || r.pref_num || r.step2_oc);
+            const hasData = serverScore > 0 || (allRecords.length > 41);
             if (hasData) {
               localStorage.setItem("facturacion_records_cache_backup", JSON.stringify(allRecords));
+              localStorage.setItem("facturacion_records_last_sync", new Date().toISOString());
             }
           } catch (e) {}
 
@@ -1631,7 +1692,7 @@
           setSaveStatus("saved");
         }
       } catch (err) {
-        const cachedR = localStorage.getItem("facturacion_records_cache");
+        const cachedR = localStorage.getItem("facturacion_records_cache_backup") || localStorage.getItem("facturacion_records_cache");
         const cachedC = localStorage.getItem("facturacion_clients_cache");
         if (cachedR) {
           try {
@@ -1644,7 +1705,7 @@
             updateKPIs();
           } catch(e) {}
         }
-        setSaveStatus("saved", "Modo local");
+        setSaveStatus("saved", "Modo local (Offline)");
       }
     }
 
@@ -3682,6 +3743,21 @@
     // ==========================================
     // BACKUP, RESTORE & DATA PERSISTENCE
     // ==========================================
+    function countOperationalRecords(recs) {
+      if (!Array.isArray(recs)) return 0;
+      return recs.filter(r => 
+        (r.step3_fac && String(r.step3_fac).trim()) ||
+        (r.pref_num && String(r.pref_num).trim()) ||
+        (r.pref_val && String(r.pref_val).trim()) ||
+        (r.fac_val && String(r.fac_val).trim()) ||
+        (r.step2_oc && String(r.step2_oc).trim()) ||
+        (r.fac_pdf_url && String(r.fac_pdf_url).trim()) ||
+        (r.report_doc_url && String(r.report_doc_url).trim()) ||
+        (r.notes && String(r.notes).trim()) ||
+        (r.area_group && String(r.area_group).trim())
+      ).length;
+    }
+
     function checkAndPromptCacheRestore() {
       try {
         const cachedRaw = localStorage.getItem("facturacion_records_cache_backup");
@@ -3689,12 +3765,18 @@
         const cachedRecs = JSON.parse(cachedRaw);
         if (!Array.isArray(cachedRecs) || cachedRecs.length === 0) return;
 
-        const serverInvoices = allRecords.filter(r => r.step3_fac && String(r.step3_fac).trim()).length;
-        const cachedInvoices = cachedRecs.filter(r => r.step3_fac && String(r.step3_fac).trim()).length;
+        const serverCount = countOperationalRecords(allRecords);
+        const cachedCount = countOperationalRecords(cachedRecs);
 
         const banner = document.getElementById("cacheRestoreBanner");
-        if (cachedInvoices > serverInvoices) {
-          if (banner) banner.classList.remove("hidden");
+        if (cachedCount > serverCount || (cachedRecs.length > allRecords.length && cachedCount > 0)) {
+          if (banner) {
+            banner.classList.remove("hidden");
+            const textEl = banner.querySelector("span.text-amber-800");
+            if (textEl) {
+              textEl.innerHTML = `Detectamos <strong>${cachedCount} registros con información</strong> en este navegador (${serverCount} en servidor). Pulsa "Restaurar" para consolidarlos.`;
+            }
+          }
         } else {
           if (banner) banner.classList.add("hidden");
         }
@@ -3706,11 +3788,42 @@
       if (banner) banner.classList.add("hidden");
     }
 
-    async function forceSyncLocalCache() {
+    async function promptManualCacheRestore() {
+      const cachedRaw = localStorage.getItem("facturacion_records_cache_backup") || localStorage.getItem("facturacion_records_cache");
+      let cachedRecs = null;
+      if (cachedRaw) {
+        try { cachedRecs = JSON.parse(cachedRaw); } catch(e) {}
+      }
+
+      const count = countOperationalRecords(cachedRecs);
+
+      if (cachedRecs && count > 0) {
+        const confirmRestore = confirm(
+          `🛡️ RECUPERACIÓN DE MEMORIA LOCAL\n\n` +
+          `Se encontraron ${count} registros con datos operativos guardados en la memoria de este navegador.\n\n` +
+          `¿Deseas restaurar y enviar esta información al servidor de inmediato?`
+        );
+        if (confirmRestore) {
+          await forceSyncLocalCache(false);
+        }
+      } else {
+        const choice = confirm(
+          `ℹ️ No se detectaron registros con datos en la memoria de este navegador específico.\n\n` +
+          `¿Deseas cargar un archivo de Copia de Seguridad (.json)?\n\n` +
+          `Haz clic en Aceptar para seleccionar un archivo .json de respaldo.`
+        );
+        if (choice) {
+          const fileInput = document.getElementById("backupJsonInput");
+          if (fileInput) fileInput.click();
+        }
+      }
+    }
+
+    async function forceSyncLocalCache(silent = false) {
       try {
         const cachedRaw = localStorage.getItem("facturacion_records_cache_backup") || localStorage.getItem("facturacion_records_cache");
         if (!cachedRaw) {
-          alert("No se encontró caché local para sincronizar.");
+          if (!silent) alert("No se encontró caché local para sincronizar.");
           return;
         }
         const cachedRecs = JSON.parse(cachedRaw);
@@ -3724,18 +3837,22 @@
 
         if (res.ok) {
           const data = await res.json();
-          showToast(`✓ Se restauraron <strong>${data.synced}</strong> registros en el servidor`);
+          showToast(`✓ Se restauraron <strong>${data.synced}</strong> registros en el servidor con éxito.`);
           dismissCacheBanner();
-          loadRecords();
+          await loadRecords();
           setSaveStatus("saved");
         } else {
-          alert("Error al sincronizar con el servidor.");
+          if (!silent) alert("Error al sincronizar con el servidor.");
           setSaveStatus("error");
         }
       } catch (e) {
-        alert("Error de conexión al sincronizar.");
+        if (!silent) alert("Error de conexión al sincronizar.");
         setSaveStatus("error");
       }
+    }
+
+    async function uploadBackupJSON(event) {
+      return uploadBackupFile(event);
     }
 
     async function downloadBackupJSON() {
