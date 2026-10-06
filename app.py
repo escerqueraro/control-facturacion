@@ -1020,6 +1020,188 @@ async def update_record_field(req: UpdateRecordFieldRequest):
 
     return {"success": True, "data": broadcast_data}
 
+class CommitAndResetRequest(BaseModel):
+    record_id: str
+    client_id: int
+    author: Optional[str] = "Sistema"
+    freq_type: Optional[str] = None
+    month: Optional[str] = None
+    period_detail: Optional[str] = None
+    area_group: Optional[str] = None
+    step1: Optional[bool] = None
+    step1_date: Optional[str] = None
+    pref_num: Optional[str] = None
+    pref_val: Optional[str] = None
+    step2: Optional[bool] = None
+    step2_oc: Optional[str] = None
+    step2_date: Optional[str] = None
+    oc_val: Optional[str] = None
+    step3: Optional[bool] = None
+    step3_fac: Optional[str] = None
+    step3_date: Optional[str] = None
+    fac_val: Optional[str] = None
+    step4: Optional[bool] = None
+    step4_date: Optional[str] = None
+    notes: Optional[str] = None
+    fac_pdf_url: Optional[str] = None
+    report_doc_url: Optional[str] = None
+
+@app.post("/api/records/commit_and_reset")
+async def commit_and_reset_record(req: CommitAndResetRequest):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM billing_records WHERE record_id = ?", (req.record_id,))
+    row = cursor.fetchone()
+    if not row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    current_data = dict(row)
+    for field_name in [
+        "freq_type", "month", "period_detail", "area_group",
+        "step1", "step1_date", "pref_num", "pref_val",
+        "step2", "step2_oc", "step2_date", "oc_val",
+        "step3", "step3_fac", "step3_date", "fac_val",
+        "step4", "step4_date", "notes",
+        "fac_pdf_url", "report_doc_url"
+    ]:
+        val = getattr(req, field_name, None)
+        if val is not None:
+            current_data[field_name] = val
+
+    now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    # Generate unique ID for this committed record
+    new_record_id = f"rec_{req.client_id}_{uuid.uuid4().hex[:8]}"
+
+    # Insert permanent consolidated record
+    cursor.execute("""
+    INSERT INTO billing_records
+    (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group,
+     step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val,
+     step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date,
+     notes, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (
+        new_record_id, current_data["client_id"], current_data["client_name"],
+        current_data["freq_type"], current_data["month"], current_data["period_detail"], current_data["period_key"],
+        current_data.get("area_group", ""),
+        current_data["step1"], current_data["step1_date"], current_data["pref_num"], current_data["pref_val"],
+        current_data["step2"], current_data["step2_oc"], current_data["step2_date"], current_data["oc_val"],
+        current_data["step3"], current_data["step3_fac"], current_data["step3_date"], current_data["fac_val"],
+        current_data.get("fac_pdf_url", ""), current_data.get("report_doc_url", ""),
+        current_data["step4"], current_data["step4_date"],
+        current_data["notes"], req.author, now_iso
+    ))
+
+    # Reset the active input record (req.record_id) to empty/clean state!
+    cursor.execute("""
+    UPDATE billing_records
+    SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
+        step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
+        step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+        fac_pdf_url = '', report_doc_url = '',
+        step4 = 0, step4_date = '', notes = '',
+        updated_by = ?, updated_at = ?
+    WHERE record_id = ?
+    """, (req.author, now_iso, req.record_id))
+
+    conn.commit()
+
+    cursor.execute("SELECT * FROM billing_records WHERE record_id = ?", (new_record_id,))
+    committed_row = dict(cursor.fetchone())
+
+    cursor.execute("SELECT * FROM billing_records WHERE record_id = ?", (req.record_id,))
+    clean_row = dict(cursor.fetchone())
+
+    conn.close()
+
+    broadcast_data = {
+        "type": "RECORD_COMMITTED_AND_RESET",
+        "client_id": req.client_id,
+        "committed_record": committed_row,
+        "clean_record": clean_row,
+        "author": req.author
+    }
+    await manager.broadcast(broadcast_data)
+
+    return {
+        "success": True,
+        "committed_record": committed_row,
+        "clean_record": clean_row
+    }
+
+class UpdateFullRecordRequest(BaseModel):
+    record_id: str
+    freq_type: Optional[str] = "Mensual"
+    month: Optional[str] = "Octubre"
+    period_detail: Optional[str] = "Mes Completo"
+    area_group: Optional[str] = ""
+    step1: Optional[bool] = False
+    step1_date: Optional[str] = ""
+    pref_num: Optional[str] = ""
+    pref_val: Optional[str] = ""
+    step2: Optional[bool] = False
+    step2_oc: Optional[str] = ""
+    step2_date: Optional[str] = ""
+    oc_val: Optional[str] = ""
+    step3: Optional[bool] = False
+    step3_fac: Optional[str] = ""
+    step3_date: Optional[str] = ""
+    fac_val: Optional[str] = ""
+    step4: Optional[bool] = False
+    step4_date: Optional[str] = ""
+    notes: Optional[str] = ""
+    fac_pdf_url: Optional[str] = ""
+    report_doc_url: Optional[str] = ""
+    updated_by: Optional[str] = "Sistema"
+
+@app.post("/api/records/update_full")
+async def update_record_full(req: UpdateFullRecordRequest):
+    now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("""
+    UPDATE billing_records
+    SET freq_type = ?, month = ?, period_detail = ?, area_group = ?,
+        step1 = ?, step1_date = ?, pref_num = ?, pref_val = ?,
+        step2 = ?, step2_oc = ?, step2_date = ?, oc_val = ?,
+        step3 = ?, step3_fac = ?, step3_date = ?, fac_val = ?,
+        step4 = ?, step4_date = ?, notes = ?,
+        fac_pdf_url = ?, report_doc_url = ?,
+        updated_by = ?, updated_at = ?
+    WHERE record_id = ?
+    """, (
+        req.freq_type, req.month, req.period_detail, req.area_group,
+        1 if req.step1 else 0, req.step1_date, req.pref_num, req.pref_val,
+        1 if req.step2 else 0, req.step2_oc, req.step2_date, req.oc_val,
+        1 if req.step3 else 0, req.step3_fac, req.step3_date, req.fac_val,
+        1 if req.step4 else 0, req.step4_date, req.notes,
+        req.fac_pdf_url, req.report_doc_url,
+        req.updated_by, now_iso, req.record_id
+    ))
+    conn.commit()
+
+    cursor.execute("SELECT * FROM billing_records WHERE record_id = ?", (req.record_id,))
+    row = cursor.fetchone()
+    conn.close()
+
+    if not row:
+        raise HTTPException(status_code=404, detail="Registro no encontrado")
+
+    updated_record = dict(row)
+    await manager.broadcast({
+        "type": "RECORD_UPDATED_FULL",
+        "record": updated_record,
+        "author": req.updated_by
+    })
+
+    return {"success": True, "record": updated_record}
+
 @app.delete("/api/records/{record_id}")
 async def delete_record(record_id: str, user: str = "Sistema"):
     conn = sqlite3.connect(DB_PATH)
@@ -1033,9 +1215,36 @@ async def delete_record(record_id: str, user: str = "Sistema"):
     client_id = row[0]
     cursor.execute("SELECT COUNT(*) FROM billing_records WHERE client_id = ?", (client_id,))
     cnt = cursor.fetchone()[0]
+
+    now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
     if cnt <= 1:
+        # If it's the only row for this client, reset it to empty/clean rather than throwing an error
+        cursor.execute("""
+        UPDATE billing_records
+        SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
+            step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
+            step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+            fac_pdf_url = '', report_doc_url = '',
+            step4 = 0, step4_date = '', notes = '', area_group = '',
+            updated_by = ?, updated_at = ?
+        WHERE record_id = ?
+        """, (user, now_iso, record_id))
+        conn.commit()
+
+        cursor.execute("SELECT * FROM billing_records WHERE record_id = ?", (record_id,))
+        conn.row_factory = sqlite3.Row
+        reset_row = dict(cursor.fetchone())
         conn.close()
-        raise HTTPException(status_code=400, detail="No se puede eliminar la única fila del cliente. Debe quedar al menos un registro.")
+
+        await manager.broadcast({
+            "type": "RECORD_RESET_CLEAN",
+            "record": reset_row,
+            "record_id": record_id,
+            "client_id": client_id,
+            "author": user
+        })
+        return {"success": True, "action": "reset_clean", "record": reset_row}
 
     cursor.execute("DELETE FROM billing_records WHERE record_id = ?", (record_id,))
     conn.commit()
@@ -1048,7 +1257,7 @@ async def delete_record(record_id: str, user: str = "Sistema"):
         "author": user
     })
 
-    return {"success": True, "deleted_id": record_id}
+    return {"success": True, "action": "deleted", "deleted_id": record_id}
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):

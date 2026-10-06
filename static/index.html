@@ -457,7 +457,8 @@
                   <th class="p-3 border-r border-slate-200 min-w-[110px] text-center">VERIFICACIÓN</th>
                   <th class="p-3 border-r border-slate-200 min-w-[160px]">FACTURA ASOCIADA</th>
                   <th class="p-3 border-r border-slate-200 min-w-[140px] text-center">INFORME</th>
-                  <th class="p-3">NOTAS</th>
+                  <th class="p-3 border-r border-slate-200">NOTAS</th>
+                  <th class="p-3 text-center w-24">ACCIÓN</th>
                 </tr>
               </thead>
               <tbody id="prefacturasTableBody" class="divide-y divide-slate-100 bg-white">
@@ -516,7 +517,8 @@
                   <th class="p-3 border-r border-slate-200 min-w-[160px] text-center bg-blue-50/40">FACTURA PDF</th>
                   <th class="p-3 border-r border-slate-200 min-w-[160px] text-center bg-slate-50">INFORME ADJUNTO</th>
                   <th class="p-3 border-r border-slate-200 min-w-[110px] text-center">ESTADO</th>
-                  <th class="p-3">NOTAS</th>
+                  <th class="p-3 border-r border-slate-200">NOTAS</th>
+                  <th class="p-3 text-center w-24">ACCIÓN</th>
                 </tr>
               </thead>
               <tbody id="facturasTableBody" class="divide-y divide-slate-100 bg-white">
@@ -557,7 +559,8 @@
                     <th class="p-2.5 border-r border-slate-200 min-w-[130px] text-right font-bold text-emerald-800">VALOR FACTURA ($)</th>
                     <th class="p-2.5 border-r border-slate-200 min-w-[140px]">OC / HES</th>
                     <th class="p-2.5 border-r border-slate-200 min-w-[120px] text-center">ADJUNTOS</th>
-                    <th class="p-2.5 text-center min-w-[120px]">ESTADO</th>
+                    <th class="p-2.5 border-r border-slate-200 text-center min-w-[120px]">ESTADO</th>
+                    <th class="p-2.5 text-center w-24">ACCIÓN</th>
                   </tr>
                 </thead>
                 <tbody id="matrixIndependentTableBody" class="divide-y divide-slate-100 bg-white">
@@ -1007,6 +1010,208 @@
           <button type="button" onclick="closeEditUserModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700">Cancelar</button>
           <button type="submit" class="px-4 py-2 text-xs font-bold rounded-xl bg-purple-700 hover:bg-purple-800 text-white shadow-xs">Guardar Cambios</button>
         </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL EDITAR Y ELIMINAR CUALQUIER REGISTRO CONSOLIDADO   -->
+  <!-- ======================================================== -->
+  <div id="editRecordModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 md:p-4 hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-5 md:p-6 border border-slate-200 transform transition-all text-slate-800 max-h-[92vh] flex flex-col">
+      <!-- Modal Header -->
+      <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-3.5 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-blue-100 text-blue-700 flex items-center justify-center text-sm font-bold shadow-2xs">
+            <i class="fa-solid fa-pen-to-square"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900" id="editModalClientTitle">Editar Registro</h3>
+            <p class="text-[11px] text-slate-500 font-medium" id="editModalRecordSubtitle">Modificación completa y gestión del registro</p>
+          </div>
+        </div>
+        <button onclick="closeEditRecordModal()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Modal Body (Scrollable) -->
+      <form id="editRecordForm" onsubmit="submitEditRecord(event)" class="space-y-4 overflow-y-auto pr-1 flex-1 text-xs">
+        <input type="hidden" id="editRecId">
+        <input type="hidden" id="editRecClientId">
+        <input type="hidden" id="editRecFacPdfUrl">
+        <input type="hidden" id="editRecReportDocUrl">
+
+        <!-- 1. Período, Frecuencia y Grupo -->
+        <div class="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+          <h4 class="font-bold text-[11px] uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+            <i class="fa-regular fa-calendar text-blue-600"></i>
+            <span>Período y Clasificación Operativa</span>
+          </h4>
+          <div class="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Frecuencia:</label>
+              <select id="editRecFreq" onchange="onEditModalFreqChange(this.value)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-semibold text-xs focus:ring-1 focus:ring-blue-500">
+                <option value="Quincenal">Quincenal</option>
+                <option value="Mensual">Mensual</option>
+                <option value="Semanal">Semanal</option>
+                <option value="Por Evento">Por Evento</option>
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Mes:</label>
+              <select id="editRecMonth" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-semibold text-xs focus:ring-1 focus:ring-blue-500">
+                <!-- Months populated dynamically -->
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Corte / Detalle:</label>
+              <select id="editRecPeriodDetail" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-semibold text-xs focus:ring-1 focus:ring-blue-500">
+                <!-- Detail options populated dynamically -->
+              </select>
+            </div>
+            <div>
+              <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Grupo Operativo:</label>
+              <select id="editRecAreaGroup" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs text-indigo-900 focus:ring-1 focus:ring-indigo-500">
+                <option value="">-- Sin Grupo --</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. Paso 1: Pre-Factura e Informe -->
+        <div class="p-3 bg-sky-50/60 rounded-2xl border border-sky-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-sky-900 text-xs">
+              <input type="checkbox" id="editRecStep1" class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
+              <span>Paso 1: Informe & Pre-Factura</span>
+            </label>
+            <span class="text-[10px] text-sky-700 bg-sky-100 px-2 py-0.5 rounded-full font-semibold">Pre-facturación</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha Informe:</label>
+              <input type="date" id="editRecStep1Date" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-sky-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Nº Pre-factura:</label>
+              <input type="text" id="editRecPrefNum" placeholder="Ej: PF-01" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs focus:ring-1 focus:ring-sky-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Valor Pre-factura ($):</label>
+              <input type="text" id="editRecPrefVal" placeholder="$ 0" oninput="formatMoneyInputDirect(this)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs focus:ring-1 focus:ring-sky-500">
+            </div>
+          </div>
+          <!-- Archivo de Informe -->
+          <div class="pt-1 flex items-center justify-between gap-2 flex-wrap" id="editRecReportDocContainer">
+            <div id="editRecReportDocInfo" class="text-[11px] text-slate-600"></div>
+            <div class="flex items-center gap-1.5">
+              <label class="px-2.5 py-1 rounded-xl bg-white hover:bg-sky-100 text-sky-800 font-bold border border-sky-300 cursor-pointer inline-flex items-center gap-1.5 text-xs shadow-2xs">
+                <i class="fa-solid fa-file-arrow-up text-sky-600"></i>
+                <span id="editRecReportBtnText">Subir/Cambiar Informe</span>
+                <input type="file" id="editRecReportInput" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="onEditModalFileSelected(event, 'report_doc')">
+              </label>
+              <button type="button" id="editRecReportRemoveBtn" onclick="removeEditModalFile('report_doc')" class="hidden px-2 py-1 text-xs text-rose-600 hover:text-rose-800 font-bold hover:bg-rose-50 rounded-lg transition" title="Quitar archivo de informe">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. Paso 2: Aprobación / OC -->
+        <div class="p-3 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-amber-900 text-xs">
+              <input type="checkbox" id="editRecStep2" class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500">
+              <span>Paso 2: Aprobación / Orden de Compra</span>
+            </label>
+            <span class="text-[10px] text-amber-700 bg-amber-100 px-2 py-0.5 rounded-full font-semibold">OC / HES</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Nº Orden de Compra / HES:</label>
+              <input type="text" id="editRecStep2Oc" placeholder="Nº OC..." class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs focus:ring-1 focus:ring-amber-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha OC / Aprobación:</label>
+              <input type="date" id="editRecStep2Date" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. Paso 3: Factura & Valores ($) -->
+        <div class="p-3 bg-emerald-50/60 rounded-2xl border border-emerald-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-emerald-900 text-xs">
+              <input type="checkbox" id="editRecStep3" class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
+              <span>Paso 3: Factura Generada</span>
+            </label>
+            <span class="text-[10px] text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full font-semibold">Facturación</span>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha Generación Factura:</label>
+              <input type="date" id="editRecStep3Date" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Nº Factura:</label>
+              <input type="text" id="editRecStep3Fac" placeholder="Nº Factura..." class="w-full p-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-emerald-950 focus:ring-1 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Valor Factura ($):</label>
+              <input type="text" id="editRecFacVal" placeholder="$ 0" oninput="formatMoneyInputDirect(this)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-emerald-950 focus:ring-1 focus:ring-emerald-500">
+            </div>
+          </div>
+          <!-- Archivo Factura PDF -->
+          <div class="pt-1 flex items-center justify-between gap-2 flex-wrap" id="editRecFacPdfContainer">
+            <div id="editRecFacPdfInfo" class="text-[11px] text-slate-600"></div>
+            <div class="flex items-center gap-1.5">
+              <label class="px-2.5 py-1 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 cursor-pointer inline-flex items-center gap-1.5 text-xs shadow-2xs">
+                <i class="fa-solid fa-file-pdf text-red-600"></i>
+                <span id="editRecFacBtnText">Subir/Cambiar PDF Factura</span>
+                <input type="file" id="editRecFacPdfInput" accept=".pdf,image/*" class="hidden" onchange="onEditModalFileSelected(event, 'fac_pdf')">
+              </label>
+              <button type="button" id="editRecFacPdfRemoveBtn" onclick="removeEditModalFile('fac_pdf')" class="hidden px-2 py-1 text-xs text-rose-600 hover:text-rose-800 font-bold hover:bg-rose-50 rounded-lg transition" title="Quitar PDF">
+                <i class="fa-solid fa-trash-can"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 5. Paso 4: Radicado / Envío & Notas -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div class="p-3 bg-purple-50/60 rounded-2xl border border-purple-200 space-y-2">
+            <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-purple-900 text-xs">
+              <input type="checkbox" id="editRecStep4" class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500">
+              <span>Paso 4: Radicado / Enviado al Cliente</span>
+            </label>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha de Envío / Radicado:</label>
+              <input type="date" id="editRecStep4Date" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-purple-500">
+            </div>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-700 mb-1 text-[11px]">Notas u Observaciones:</label>
+            <textarea id="editRecNotes" rows="3" placeholder="Comentarios del servicio, validaciones..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-1 focus:ring-blue-500 resize-none"></textarea>
+          </div>
+        </div>
+
+        <!-- Modal Footer Buttons -->
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-between gap-3 shrink-0">
+          <button type="button" onclick="confirmDeleteFromEditModal()" class="px-3.5 py-2 text-xs font-bold rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-300 flex items-center gap-1.5 transition active:scale-95 cursor-pointer">
+            <i class="fa-regular fa-trash-can"></i>
+            <span>Eliminar Registro Definitivamente</span>
+          </button>
+          
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="closeEditRecordModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">Cancelar</button>
+            <button type="submit" id="saveEditRecordBtn" class="px-4 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer">
+              <i class="fa-solid fa-check"></i>
+              <span>Guardar Cambios</span>
+            </button>
+          </div>
+        </div>
+
       </form>
     </div>
   </div>
@@ -1749,6 +1954,32 @@
               handleRemoteRecordCreated(data);
             } else if (data.type === "RECORD_DELETED") {
               handleRemoteRecordDeleted(data);
+            } else if (data.type === "RECORD_COMMITTED_AND_RESET") {
+              allRecords = allRecords.filter(r => r.record_id !== data.committed_record.record_id && r.record_id !== data.clean_record.record_id);
+              allRecords.push(data.committed_record);
+              allRecords.push(data.clean_record);
+              renderSingleClientSection(data.client_id);
+              renderPrefacturasTable();
+              renderFacturasTable();
+              renderIndependentMatrixTable();
+              updateKPIs();
+            } else if (data.type === "RECORD_UPDATED_FULL") {
+              const idx = allRecords.findIndex(r => r.record_id === data.record.record_id);
+              if (idx !== -1) allRecords[idx] = data.record;
+              else allRecords.push(data.record);
+              renderSingleClientSection(data.record.client_id);
+              renderPrefacturasTable();
+              renderFacturasTable();
+              renderIndependentMatrixTable();
+              updateKPIs();
+            } else if (data.type === "RECORD_RESET_CLEAN") {
+              const idx = allRecords.findIndex(r => r.record_id === data.record_id);
+              if (idx !== -1) allRecords[idx] = data.record;
+              renderSingleClientSection(data.client_id);
+              renderPrefacturasTable();
+              renderFacturasTable();
+              renderIndependentMatrixTable();
+              updateKPIs();
             } else if (data.type === "MATRIX_CELL_UPDATED") {
               handleRemoteMatrixCellUpdated(data);
             } else if (data.type === "PRESENCE_UPDATE") {
@@ -2379,7 +2610,488 @@
     }
 
     // ==========================================
-    // RENDER CHECKLIST TABLE (GLOBAL CONSOLIDATED)
+    // HELPER: VERIFY IF A RECORD CONTAINS REAL DATA
+    // ==========================================
+    function isRecordWithData(r) {
+      if (!r) return false;
+      return Boolean(
+        r.step1 ||
+        (r.pref_num && String(r.pref_num).trim() !== "") ||
+        (r.pref_val && parseMoney(r.pref_val) > 0) ||
+        r.step2 ||
+        (r.step2_oc && String(r.step2_oc).trim() !== "") ||
+        r.step3 ||
+        (r.step3_fac && String(r.step3_fac).trim() !== "") ||
+        (r.fac_val && parseMoney(r.fac_val) > 0) ||
+        r.step4 ||
+        (r.fac_pdf_url && String(r.fac_pdf_url).trim() !== "") ||
+        (r.report_doc_url && String(r.report_doc_url).trim() !== "") ||
+        (r.notes && String(r.notes).trim() !== "")
+      );
+    }
+
+    // ==========================================
+    // BUILD MODULAR CLIENT CARD DOM ELEMENT
+    // ==========================================
+    function buildClientCardElement(c) {
+      const isViewer = currentUser ? currentUser.role === "viewer" : true;
+      const isBlocked = !!c.is_blocked;
+      const groups = getOperationalGroupsForClient(c.name, c.id);
+
+      const seenIds = new Set();
+      let cRecords = allRecords.filter(r => {
+        if (r.client_id !== c.id) return false;
+        if (seenIds.has(r.record_id)) return false;
+        seenIds.add(r.record_id);
+        return true;
+      });
+
+      if (cRecords.length === 0) {
+        const defRec = {
+          record_id: `rec_${c.id}_default`,
+          client_id: c.id,
+          client_name: c.name,
+          freq_type: c.freqType || c.freq_type || "Quincenal",
+          month: "Octubre",
+          period_detail: "1Q (1-15)",
+          area_group: groups.length > 0 ? groups[0] : "",
+          step1: false,
+          step1_date: "",
+          pref_num: "",
+          pref_val: "",
+          step2: false,
+          step2_oc: "",
+          step2_date: "",
+          step3: false,
+          step3_fac: "",
+          step3_date: "",
+          fac_val: "",
+          fac_pdf_url: "",
+          report_doc_url: "",
+          step4: false,
+          step4_date: "",
+          notes: "",
+          updated_by: "Sistema"
+        };
+        cRecords = [defRec];
+        allRecords.push(defRec);
+      }
+
+      // Determine active capture record vs committed records
+      let activeRecord = cRecords.find(r => r.record_id === `rec_${c.id}_default`);
+      if (!activeRecord) {
+        activeRecord = cRecords.find(r => !isRecordWithData(r)) || cRecords[0];
+      }
+
+      // Committed records: records other than the clean capture slot that have data
+      const committedRecords = cRecords.filter(r => r.record_id !== activeRecord.record_id && isRecordWithData(r));
+
+      const card = document.createElement("div");
+      card.id = `client-section-${c.id}`;
+      card.className = `bg-white rounded-2xl border ${isBlocked ? 'border-rose-300 opacity-80' : 'border-[var(--card-border)]'} shadow-xs overflow-hidden transition`;
+
+      // Header Div
+      const headerDiv = document.createElement("div");
+      headerDiv.className = `p-3.5 ${isBlocked ? 'bg-rose-50/70 border-b border-rose-200' : 'bg-slate-50/90 border-b border-slate-200'} flex flex-col md:flex-row md:items-center justify-between gap-3`;
+      headerDiv.innerHTML = `
+        <div class="flex items-center gap-3">
+          <span class="w-8 h-8 rounded-xl ${isBlocked ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-white border-slate-200 text-slate-700'} border flex items-center justify-center font-mono font-bold text-xs shadow-2xs">${c.id}</span>
+          <div>
+            <div class="flex items-center gap-2 flex-wrap">
+              <h3 class="font-extrabold text-sm text-slate-900 tracking-tight">${c.name}</h3>
+              ${isBlocked ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 border border-rose-300">🚫 BLOQUEADA</span>' : ''}
+              <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${c.resp === 'Edwar' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-pink-100 text-pink-800 border border-pink-300'}">
+                ${c.resp === 'Edwar' ? '🐉 Edwar' : '🐱 Sol'}
+              </span>
+              ${groups.length > 0 ? `
+                <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200" title="Grupos operativos: ${groups.join(', ')}">
+                  ✈️ ${groups.length} Grupos (${groups.join('/')})
+                </span>
+              ` : ''}
+              <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200/80 text-slate-700">
+                📅 ${c.key_day || c.keyDay || ''}
+              </span>
+              <span class="text-[10px] text-slate-400 font-medium italic">(${c.prog})</span>
+            </div>
+            <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
+              <span>👤 <strong>Contacto:</strong> ${c.contact || ''}</span>
+              <span class="text-slate-300">•</span>
+              <span>📋 <strong>Regla:</strong> ${c.obs || ''}</span>
+            </div>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-3 self-end md:self-center">
+          <div id="client-summary-${c.id}"></div>
+          <button onclick="addNewRecord(${c.id}, this)" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs flex items-center gap-1.5 transition active:scale-95 ${isViewer ? 'hidden' : ''}" title="Agregar fila de captura adicional">
+            <i class="fa-solid fa-plus text-[10px]"></i>
+            <span>+ Fila Extra</span>
+          </button>
+        </div>
+      `;
+      card.appendChild(headerDiv);
+
+      // Section A: Active Capture Form (Formulario de Captura Activo)
+      const formSection = document.createElement("div");
+      formSection.className = "p-3 border-b border-slate-100 bg-white";
+
+      const r = activeRecord;
+      const detailOpts = getDetailOptionsForFreq(r.freq_type);
+      const detailOptionsHtml = detailOpts.map(opt => `<option value="${opt}" ${r.period_detail === opt ? 'selected' : ''}>${opt}</option>`).join("");
+      const monthOptionsHtml = MONTHS_LIST.map(m => `<option value="${m}" ${r.month === m ? 'selected' : ''}>${m}</option>`).join("");
+      const st = computeRecordStatus(r);
+      const reqInf = (c.req_inf !== undefined) ? !!c.req_inf : !!c.reqInf;
+      const reqOc = (c.req_oc !== undefined) ? !!c.req_oc : !!c.reqOc;
+
+      let groupSelectorHtml = "";
+      if (groups.length > 0) {
+        groupSelectorHtml = `
+          <div class="flex items-center gap-1 mt-1 pt-1 border-t border-slate-100">
+            <span class="text-[10px] text-indigo-700 w-10 font-bold">Grupo:</span>
+            <select id="select-group-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'area_group', this.value)" class="text-[11px] bg-indigo-50/80 border border-indigo-200 rounded px-1.5 py-0.5 text-indigo-900 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 w-32">
+              <option value="" ${!r.area_group ? 'selected' : ''}>-- Grupo Operativo --</option>
+              ${groups.map(g => `<option value="${g}" ${r.area_group === g ? 'selected' : ''}>${g}</option>`).join("")}
+            </select>
+          </div>
+        `;
+      }
+
+      formSection.innerHTML = `
+        <div class="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] font-extrabold uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+              <i class="fa-solid fa-pen-clip text-blue-600"></i>
+              <span>Captura de Factura / Pre-factura Activa</span>
+            </span>
+            <span class="text-[10px] text-slate-400 font-medium">(Complete los datos y presione "Enviar a Registro")</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button type="button" onclick="commitAndResetClientRecord('${r.record_id}', ${c.id}, this)" class="px-3.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${isViewer ? 'hidden' : ''}">
+              <i class="fa-solid fa-cloud-arrow-up text-xs"></i>
+              <span>Enviar a Registro</span>
+            </button>
+          </div>
+        </div>
+
+        <div class="overflow-x-auto">
+          <table class="w-full text-left text-xs border-collapse">
+            <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
+              <tr>
+                <th class="p-2 min-w-[200px]">Frecuencia, Mes & Grupo</th>
+                <th class="p-2 min-w-[230px] bg-sky-50/50 text-sky-900 border-x border-sky-100">Paso 1: Informe & Pre-Factura</th>
+                <th class="p-2 min-w-[200px] bg-amber-50/50 text-amber-900 border-r border-amber-100">Paso 2: Aprobación / OC</th>
+                <th class="p-2 min-w-[250px] bg-emerald-50/50 text-emerald-900 border-r border-emerald-100">Paso 3: Factura & Valores ($)</th>
+                <th class="p-2 min-w-[150px] bg-purple-50/50 text-purple-900 border-r border-purple-100">Paso 4: Envío</th>
+                <th class="p-2 min-w-[130px] text-center">Estado</th>
+                <th class="p-2 min-w-[160px]">Notas / Observaciones</th>
+                <th class="p-2 text-center w-28 ${isViewer ? 'hidden' : ''}">Acción</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr id="record-row-${r.record_id}" class="hover:bg-slate-50/80 transition">
+                <td class="p-2 align-top">
+                  <div class="space-y-1.5">
+                    <div class="flex items-center gap-1">
+                      <span class="text-[10px] text-slate-400 w-10 font-medium">Tipo:</span>
+                      <select id="select-freq-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="onFreqChange('${r.record_id}', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
+                        <option value="Quincenal" ${r.freq_type === 'Quincenal' ? 'selected' : ''}>Quincenal</option>
+                        <option value="Mensual" ${r.freq_type === 'Mensual' ? 'selected' : ''}>Mensual</option>
+                        <option value="Semanal" ${r.freq_type === 'Semanal' ? 'selected' : ''}>Semanal</option>
+                        <option value="Por Evento" ${r.freq_type === 'Por Evento' ? 'selected' : ''}>Por Evento</option>
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-[10px] text-slate-400 w-10 font-medium">Mes:</span>
+                      <select id="select-month-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'month', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
+                        ${monthOptionsHtml}
+                      </select>
+                    </div>
+                    <div class="flex items-center gap-1">
+                      <span class="text-[10px] text-slate-400 w-10 font-medium">Corte:</span>
+                      <select id="select-detail-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'period_detail', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
+                        ${detailOptionsHtml}
+                      </select>
+                    </div>
+                    ${groupSelectorHtml}
+                  </div>
+                </td>
+
+                <td class="p-2 bg-sky-50/30 border-x border-sky-100 align-top">
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <label class="inline-flex items-center gap-1.5 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
+                        <input type="checkbox" id="check-step1-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step1', this.checked)" ${r.step1 ? 'checked' : ''} class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
+                        <span id="label-step1-${r.record_id}" class="text-xs font-semibold ${r.step1 ? 'text-sky-800' : 'text-slate-500'}">
+                          ${reqInf ? 'Informe Enviado' : 'Informe / Pre-fac'}
+                        </span>
+                      </label>
+                      ${!reqInf ? '<span class="text-[9px] font-bold text-sky-700 bg-sky-100/80 px-1.5 py-0.2 rounded border border-sky-200" title="Control interno de verificación para prefacturas">Interno</span>' : ''}
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Fecha:</span>
+                      <input type="date" id="date-step1-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step1_date || ''}" onchange="updateRecordField('${r.record_id}', 'step1_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Nº Pref:</span>
+                      <input type="text" id="text-pref-num-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="Ej: PF-01" value="${r.pref_num || ''}" oninput="debounceField('${r.record_id}', 'pref_num', this.value)" onchange="updateRecordField('${r.record_id}', 'pref_num', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Valor $:</span>
+                      <input type="text" id="text-pref-val-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="$ 0" value="${formatCurrencyString(r.pref_val)}" oninput="onMoneyInput(this, '${r.record_id}', 'pref_val')" onblur="onMoneyBlur(this, '${r.record_id}', 'pref_val')" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
+                    </div>
+                    <div class="pt-1">
+                      ${r.report_doc_url ? `
+                        <div class="flex items-center gap-1">
+                          <a href="${r.report_doc_url}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-sky-100 text-sky-800 hover:bg-sky-200 border border-sky-300 transition" title="Ver informe adjunto">
+                            <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                            <span>Ver Informe</span>
+                          </a>
+                          ${!isViewer ? `
+                            <button onclick="deleteUploadedFile('${r.record_id}', 'report_doc')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar informe">
+                              <i class="fa-solid fa-xmark"></i>
+                            </button>
+                          ` : ''}
+                        </div>
+                      ` : (!isViewer ? `
+                        <label class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer transition">
+                          <i class="fa-solid fa-paperclip text-slate-500"></i>
+                          <span>Adjuntar Informe</span>
+                          <input type="file" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'report_doc')">
+                        </label>
+                      ` : '')}
+                    </div>
+                    <div id="pref-badge-${r.record_id}"></div>
+                  </div>
+                </td>
+
+                <td class="p-2 bg-amber-50/30 border-r border-amber-100 align-top">
+                  <div class="space-y-1.5">
+                    <div class="flex items-center justify-between">
+                      <label class="inline-flex items-center gap-1.5 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
+                        <input type="checkbox" id="check-step2-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step2', this.checked)" ${r.step2 ? 'checked' : ''} class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500">
+                        <span id="label-step2-${r.record_id}" class="text-xs font-semibold ${r.step2 ? 'text-amber-800' : 'text-slate-500'}">OC / Aprobación</span>
+                      </label>
+                      ${!reqOc ? '<span class="text-[9px] font-medium text-amber-700 bg-amber-100/70 px-1.5 py-0.2 rounded" title="Orden de compra no obligatoria para facturar">Opcional</span>' : ''}
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Nº OC:</span>
+                      <input type="text" id="text-oc-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="Nº OC / HES" value="${r.step2_oc || ''}" oninput="debounceField('${r.record_id}', 'step2_oc', this.value)" onchange="updateRecordField('${r.record_id}', 'step2_oc', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold w-32 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Fecha:</span>
+                      <input type="date" id="date-oc-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step2_date || ''}" onchange="updateRecordField('${r.record_id}', 'step2_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-amber-500">
+                    </div>
+                    <div id="oc-badge-${r.record_id}"></div>
+                  </div>
+                </td>
+
+                <td class="p-2 bg-emerald-50/30 border-r border-emerald-100 align-top">
+                  <div class="space-y-1.5">
+                    <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
+                      <input type="checkbox" id="check-step3-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step3', this.checked)" ${r.step3 ? 'checked' : ''} class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
+                      <span id="label-step3-${r.record_id}" class="text-xs font-semibold ${r.step3 ? 'text-emerald-800' : 'text-slate-500'}">Factura Generada</span>
+                    </label>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">F. Gen:</span>
+                      <input type="date" id="date-fac-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step3_date || ''}" onchange="updateRecordField('${r.record_id}', 'step3_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Nº Fac:</span>
+                      <input type="text" id="text-fac-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="Nº Factura(s)" value="${r.step3_fac || ''}" oninput="debounceField('${r.record_id}', 'step3_fac', this.value)" onchange="updateRecordField('${r.record_id}', 'step3_fac', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div class="flex items-center gap-1.5">
+                      <span class="text-[10px] text-slate-500 w-12 font-medium">Valor $:</span>
+                      <input type="text" id="text-fac-val-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="$ 0" value="${formatCurrencyString(r.fac_val)}" oninput="onMoneyInput(this, '${r.record_id}', 'fac_val')" onblur="onMoneyBlur(this, '${r.record_id}', 'fac_val')" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
+                    </div>
+                    <div class="pt-1">
+                      ${r.fac_pdf_url ? `
+                        <div class="flex items-center gap-1">
+                          <a href="${r.fac_pdf_url}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 transition" title="Ver Factura PDF">
+                            <i class="fa-solid fa-file-pdf text-red-600"></i>
+                            <span>Ver Factura PDF</span>
+                          </a>
+                          ${!isViewer ? `
+                            <button onclick="deleteUploadedFile('${r.record_id}', 'fac_pdf')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar PDF">
+                              <i class="fa-solid fa-xmark"></i>
+                            </button>
+                          ` : ''}
+                        </div>
+                      ` : (!isViewer ? `
+                        <label class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer transition">
+                          <i class="fa-solid fa-paperclip text-slate-500"></i>
+                          <span>Adjuntar Factura PDF</span>
+                          <input type="file" accept=".pdf,image/*" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'fac_pdf')">
+                        </label>
+                      ` : '')}
+                    </div>
+                    <div id="fac-badge-${r.record_id}"></div>
+                    <div id="diff-badge-${r.record_id}"></div>
+                  </div>
+                </td>
+
+                <td class="p-2 bg-purple-50/30 border-r border-purple-100 align-top">
+                  <div class="space-y-1.5">
+                    <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
+                      <input type="checkbox" id="check-step4-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step4', this.checked)" ${r.step4 ? 'checked' : ''} class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500">
+                      <span id="label-step4-${r.record_id}" class="text-xs font-semibold ${r.step4 ? 'text-purple-800' : 'text-slate-500'}">Radicado / Enviado</span>
+                    </label>
+                    <div class="text-[10px] text-slate-600 font-semibold flex items-center gap-1" title="${c.canal || ''}">
+                      <i class="fa-solid fa-paper-plane text-purple-500 text-[10px]"></i>
+                      <span class="truncate max-w-[140px]">${c.canal || 'Correo'}</span>
+                    </div>
+                  </div>
+                </td>
+
+                <td class="p-2 text-center align-top">
+                  <span id="status-badge-${r.record_id}" class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.cls} shadow-2xs">
+                    ${st.text}
+                  </span>
+                </td>
+
+                <td class="p-2 align-top">
+                  <textarea id="text-notes-${r.record_id}" ${isViewer ? 'disabled' : ''} rows="2" placeholder="Notas u observaciones..." oninput="debounceField('${r.record_id}', 'notes', this.value)" onchange="updateRecordField('${r.record_id}', 'notes', this.value)" class="text-[11px] w-full bg-white border border-slate-200 rounded p-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none">${r.notes || ''}</textarea>
+                </td>
+
+                <td class="p-2 text-center align-top ${isViewer ? 'hidden' : ''}">
+                  <button type="button" onclick="commitAndResetClientRecord('${r.record_id}', ${c.id}, this)" class="w-full px-2.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center justify-center gap-1 transition active:scale-95 cursor-pointer whitespace-nowrap" title="Enviar datos al registro y limpiar los cuadros de relleno">
+                    <i class="fa-solid fa-cloud-arrow-up text-xs"></i>
+                    <span>Enviar</span>
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      `;
+      card.appendChild(formSection);
+
+      // Section B: Consolidated Panel (Panel Consolidado de Registros Guardados)
+      const consolidatedSection = document.createElement("div");
+      consolidatedSection.className = "border-t border-slate-200 bg-slate-50/70 p-3 space-y-2";
+
+      let tableRowsHtml = "";
+      if (committedRecords.length === 0) {
+        tableRowsHtml = `
+          <div class="py-2.5 px-3 text-center text-slate-400 italic text-xs bg-white rounded-xl border border-dashed border-slate-200">
+            No hay registros consolidados guardados para esta empresa. Diligencie el formulario arriba y haga clic en "Enviar a Registro".
+          </div>
+        `;
+      } else {
+        tableRowsHtml = `
+          <div class="overflow-x-auto bg-white rounded-xl border border-slate-200 shadow-2xs">
+            <table class="w-full text-left text-xs border-collapse">
+              <thead class="bg-slate-100/90 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                <tr>
+                  <th class="p-2 text-center w-8">#</th>
+                  <th class="p-2 min-w-[150px]">Período & Grupo</th>
+                  <th class="p-2 min-w-[180px] bg-sky-50/50 text-sky-900 border-x border-sky-100">Pre-Factura / Informe</th>
+                  <th class="p-2 min-w-[130px] bg-amber-50/50 text-amber-900 border-r border-amber-100">Orden de Compra</th>
+                  <th class="p-2 min-w-[180px] bg-emerald-50/50 text-emerald-900 border-r border-emerald-100">Factura & Valor ($)</th>
+                  <th class="p-2 text-center min-w-[100px]">Estado</th>
+                  <th class="p-2 min-w-[120px]">Notas</th>
+                  <th class="p-2 text-center w-20">Acción</th>
+                </tr>
+              </thead>
+              <tbody class="divide-y divide-slate-100">
+                ${committedRecords.map((cr, cIdx) => {
+                  const cSt = computeRecordStatus(cr);
+                  return `
+                    <tr class="hover:bg-slate-50/80 transition">
+                      <td class="p-2 text-center text-slate-400 font-mono text-[11px] font-bold">${cIdx + 1}</td>
+                      <td class="p-2">
+                        <div class="font-bold text-slate-900 text-[11px]">${cr.month} - ${cr.period_detail}</div>
+                        <div class="text-[10px] text-slate-500 font-medium">${cr.freq_type}</div>
+                        ${cr.area_group ? `<span class="inline-block mt-0.5 px-1.5 py-0.2 text-[9px] font-extrabold rounded bg-indigo-100 text-indigo-800 border border-indigo-200">${cr.area_group}</span>` : ''}
+                      </td>
+                      <td class="p-2 bg-sky-50/20 border-x border-sky-100">
+                        <div class="font-bold text-sky-950">${cr.pref_num || '<span class="text-slate-400 font-normal italic">-</span>'}</div>
+                        <div class="font-mono text-[11px] font-bold text-sky-800">${formatCurrencyString(cr.pref_val) || '$ 0'}</div>
+                        ${cr.step1_date ? `<div class="text-[10px] text-slate-500">${cr.step1_date}</div>` : ''}
+                        ${cr.report_doc_url ? `
+                          <div class="mt-1">
+                            <a href="${cr.report_doc_url}" target="_blank" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-sky-100 text-sky-800 hover:bg-sky-200 border border-sky-300">
+                              <i class="fa-solid fa-file-excel text-emerald-600"></i> Informe
+                            </a>
+                          </div>
+                        ` : ''}
+                      </td>
+                      <td class="p-2 bg-amber-50/20 border-r border-amber-100">
+                        ${cr.step2_oc ? `
+                          <div class="font-bold text-amber-950">${cr.step2_oc}</div>
+                          ${cr.step2_date ? `<div class="text-[10px] text-slate-500">${cr.step2_date}</div>` : ''}
+                        ` : '<span class="text-slate-400 italic text-[11px]">Sin OC</span>'}
+                      </td>
+                      <td class="p-2 bg-emerald-50/20 border-r border-emerald-100">
+                        <div class="font-bold text-emerald-950 font-mono">${cr.step3_fac || '<span class="text-slate-400 font-normal italic">Sin Factura</span>'}</div>
+                        <div class="font-mono text-[11px] font-bold text-emerald-800">${formatCurrencyString(cr.fac_val) || '$ 0'}</div>
+                        ${cr.step3_date ? `<div class="text-[10px] text-slate-500 font-mono">${cr.step3_date}</div>` : ''}
+                        ${cr.fac_pdf_url ? `
+                          <div class="mt-1">
+                            <a href="${cr.fac_pdf_url}" target="_blank" class="inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300">
+                              <i class="fa-solid fa-file-pdf text-red-600"></i> PDF
+                            </a>
+                          </div>
+                        ` : ''}
+                      </td>
+                      <td class="p-2 text-center">
+                        <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${cSt.cls}">${cSt.text}</span>
+                        ${cr.step4 ? `<div class="text-[9px] font-bold text-purple-700 mt-0.5">✓ Enviada</div>` : ''}
+                      </td>
+                      <td class="p-2 text-[11px] text-slate-500 truncate max-w-[120px]">${cr.notes || '-'}</td>
+                      <td class="p-2 text-center">
+                        <button type="button" onclick="openEditRecordModal('${cr.record_id}')" class="px-2.5 py-1 text-xs font-bold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs inline-flex items-center gap-1 transition active:scale-95 cursor-pointer" title="Editar todos los campos o eliminar este registro">
+                          <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+                          <span>Editar</span>
+                        </button>
+                      </td>
+                    </tr>
+                  `;
+                }).join('')}
+              </tbody>
+            </table>
+          </div>
+        `;
+      }
+
+      consolidatedSection.innerHTML = `
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-5 h-5 rounded-md bg-blue-100 text-blue-700 flex items-center justify-center text-[10px] font-bold">
+              <i class="fa-solid fa-layer-group"></i>
+            </span>
+            <h4 class="font-bold text-xs uppercase tracking-wider text-slate-800">
+              Panel Consolidado de Registros Guardados (${committedRecords.length})
+            </h4>
+          </div>
+          <span class="text-[11px] text-slate-500 font-medium italic">Historial de facturación de esta empresa</span>
+        </div>
+        ${tableRowsHtml}
+      `;
+      card.appendChild(consolidatedSection);
+
+      return card;
+    }
+
+    // ==========================================
+    // RENDER SINGLE CLIENT SECTION (LOCAL REFRESH NO RELOAD)
+    // ==========================================
+    function renderSingleClientSection(clientId) {
+      const existingCard = document.getElementById(`client-section-${clientId}`);
+      const clientMeta = allClients.find(c => c.id === clientId) || CLIENTS_MASTER.find(c => c.id === clientId);
+      if (!clientMeta) return;
+
+      const newCard = buildClientCardElement(clientMeta);
+      if (existingCard && existingCard.parentNode) {
+        existingCard.parentNode.replaceChild(newCard, existingCard);
+      } else {
+        const container = document.getElementById("clientsGroupContainer");
+        if (container) container.appendChild(newCard);
+      }
+      updateClientHeaderSummary(clientId);
+    }
+
+    // ==========================================
+    // RENDER FULL CHECKLIST TABLE
     // ==========================================
     function renderTable() {
       const container = document.getElementById("clientsGroupContainer");
@@ -2390,62 +3102,19 @@
       const filterFreq = document.getElementById("filterFreq") ? document.getElementById("filterFreq").value : "ALL";
       const filterStatus = document.getElementById("filterStatus") ? document.getElementById("filterStatus").value : "ALL";
       const search = document.getElementById("searchInput") ? document.getElementById("searchInput").value.toLowerCase().trim() : "";
-      const isViewer = currentUser ? currentUser.role === "viewer" : true;
 
       const clientsList = allClients.length > 0 ? allClients : CLIENTS_MASTER;
 
       clientsList.forEach(c => {
         if (filterResp !== "ALL" && c.resp !== filterResp) return;
 
-        const seenIds = new Set();
-        let cRecords = allRecords.filter(r => {
-          if (r.client_id !== c.id) return false;
-          if (seenIds.has(r.record_id)) return false;
-          seenIds.add(r.record_id);
-          return true;
-        });
-
-        if (cRecords.length === 0) {
-          const groups = getOperationalGroupsForClient(c.name, c.id);
-          cRecords = [{
-            record_id: `rec_${c.id}_default`,
-            client_id: c.id,
-            client_name: c.name,
-            freq_type: c.freqType || c.freq_type,
-            month: "Octubre",
-            period_detail: "1Q (1-15)",
-            area_group: groups.length > 0 ? groups[0] : "",
-            step1: false,
-            step1_date: "",
-            pref_num: "",
-            pref_val: "",
-            step2: false,
-            step2_oc: "",
-            step2_date: "",
-            step3: false,
-            step3_fac: "",
-            step3_date: "",
-            fac_val: "",
-            fac_pdf_url: "",
-            report_doc_url: "",
-            step4: false,
-            step4_date: "",
-            notes: "",
-            updated_by: "Sistema"
-          }];
+        const cRecords = allRecords.filter(r => r.client_id === c.id);
+        if (filterFreq !== "ALL" && !cRecords.some(r => r.freq_type === filterFreq)) {
+          if (c.freq_type !== filterFreq && c.freqType !== filterFreq) return;
         }
-
-        // Consolidated Global View: Do NOT filter out by month!
-        if (filterFreq !== "ALL") {
-          cRecords = cRecords.filter(r => r.freq_type === filterFreq);
-          if (cRecords.length === 0) return;
+        if (filterStatus !== "ALL" && !cRecords.some(r => computeRecordStatus(r).key === filterStatus)) {
+          return;
         }
-
-        if (filterStatus !== "ALL") {
-          cRecords = cRecords.filter(r => computeRecordStatus(r).key === filterStatus);
-          if (cRecords.length === 0) return;
-        }
-
         if (search) {
           const matchClient = c.name.toLowerCase().includes(search) || (c.contact && c.contact.toLowerCase().includes(search)) || (c.obs && c.obs.toLowerCase().includes(search));
           const matchRecord = cRecords.some(r => 
@@ -2458,304 +3127,374 @@
           if (!matchClient && !matchRecord) return;
         }
 
-        const isBlocked = !!c.is_blocked;
-        const groups = getOperationalGroupsForClient(c.name, c.id);
-
-        const card = document.createElement("div");
-        card.id = `client-section-${c.id}`;
-        card.className = `bg-white rounded-2xl border ${isBlocked ? 'border-rose-300 opacity-80' : 'border-[var(--card-border)]'} shadow-xs overflow-hidden transition`;
-
-        const headerDiv = document.createElement("div");
-        headerDiv.className = `p-3.5 ${isBlocked ? 'bg-rose-50/70 border-b border-rose-200' : 'bg-slate-50/90 border-b border-slate-200'} flex flex-col md:flex-row md:items-center justify-between gap-3`;
-
-        headerDiv.innerHTML = `
-          <div class="flex items-center gap-3">
-            <span class="w-8 h-8 rounded-xl ${isBlocked ? 'bg-rose-100 text-rose-800 border-rose-300' : 'bg-white border-slate-200 text-slate-700'} border flex items-center justify-center font-mono font-bold text-xs shadow-2xs">${c.id}</span>
-            <div>
-              <div class="flex items-center gap-2 flex-wrap">
-                <h3 class="font-extrabold text-sm text-slate-900 tracking-tight">${c.name}</h3>
-                ${isBlocked ? '<span class="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-200 text-rose-900 border border-rose-300">🚫 BLOQUEADA</span>' : ''}
-                <span class="text-[11px] font-bold px-2.5 py-0.5 rounded-full ${c.resp === 'Edwar' ? 'bg-amber-100 text-amber-800 border border-amber-300' : 'bg-pink-100 text-pink-800 border border-pink-300'}">
-                  ${c.resp === 'Edwar' ? '🐉 Edwar' : '🐱 Sol'}
-                </span>
-                ${groups.length > 0 ? `
-                  <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-indigo-100 text-indigo-800 border border-indigo-200" title="Grupos operativos: ${groups.join(', ')}">
-                    ✈️ ${groups.length} Grupos (${groups.join('/')})
-                  </span>
-                ` : ''}
-                <span class="text-[10px] font-semibold px-2 py-0.5 rounded bg-slate-200/80 text-slate-700">
-                  📅 ${c.key_day || c.keyDay || ''}
-                </span>
-                <span class="text-[10px] text-slate-400 font-medium italic">(${c.prog})</span>
-              </div>
-              <div class="text-[11px] text-slate-500 mt-1 flex items-center gap-2 flex-wrap">
-                <span>👤 <strong>Contacto:</strong> ${c.contact || ''}</span>
-                <span class="text-slate-300">•</span>
-                <span>📋 <strong>Regla:</strong> ${c.obs || ''}</span>
-              </div>
-            </div>
-          </div>
-
-          <div class="flex items-center gap-3 self-end md:self-center">
-            <div id="client-summary-${c.id}"></div>
-
-            <button onclick="addNewRecord(${c.id}, this)" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-700 text-white shadow-xs flex items-center gap-1.5 transition active:scale-95 ${isViewer ? 'hidden' : ''}">
-              <i class="fa-solid fa-plus text-[10px]"></i>
-              <span>+ Agregar Fila / Factura / OC</span>
-            </button>
-          </div>
-        `;
-        card.appendChild(headerDiv);
-
-        const tableContainer = document.createElement("div");
-        tableContainer.className = "overflow-x-auto";
-
-        const table = document.createElement("table");
-        table.className = "w-full text-left text-xs border-collapse";
-
-        table.innerHTML = `
-          <thead class="bg-slate-100/70 border-b border-slate-200 text-slate-500 uppercase tracking-wider text-[10px] font-bold">
-            <tr>
-              <th class="p-2.5 text-center w-12">#</th>
-              <th class="p-2.5 min-w-[220px]">Frecuencia, Mes & Grupo</th>
-              <th class="p-2.5 min-w-[240px] bg-sky-50/50 text-sky-900 border-x border-sky-100">Paso 1: Informe & Pre-Factura</th>
-              <th class="p-2.5 min-w-[220px] bg-amber-50/50 text-amber-900 border-r border-amber-100">Paso 2: Aprobación / OC</th>
-              <th class="p-2.5 min-w-[280px] bg-emerald-50/50 text-emerald-900 border-r border-emerald-100">Paso 3: Factura & Valores ($)</th>
-              <th class="p-2.5 min-w-[170px] bg-purple-50/50 text-purple-900 border-r border-purple-100">Paso 4: Envío</th>
-              <th class="p-2.5 min-w-[150px] text-center">Estado</th>
-              <th class="p-2.5 min-w-[180px]">Notas / Observaciones</th>
-              <th class="p-2.5 text-center w-14 ${isViewer ? 'hidden' : ''}">Acción</th>
-            </tr>
-          </thead>
-          <tbody id="client-rows-${c.id}" class="divide-y divide-slate-100"></tbody>
-        `;
-
-        const tbody = table.querySelector(`#client-rows-${c.id}`);
-
-        cRecords.forEach((r, idx) => {
-          const rowTr = document.createElement("tr");
-          rowTr.id = `record-row-${r.record_id}`;
-          rowTr.className = "hover:bg-slate-50/80 transition border-b border-slate-100";
-
-          const detailOpts = getDetailOptionsForFreq(r.freq_type);
-          const detailOptionsHtml = detailOpts.map(opt => `<option value="${opt}" ${r.period_detail === opt ? 'selected' : ''}>${opt}</option>`).join("");
-          const monthOptionsHtml = MONTHS_LIST.map(m => `<option value="${m}" ${r.month === m ? 'selected' : ''}>${m}</option>`).join("");
-          const st = computeRecordStatus(r);
-
-          const reqInf = (c.req_inf !== undefined) ? !!c.req_inf : !!c.reqInf;
-          const reqOc = (c.req_oc !== undefined) ? !!c.req_oc : !!c.reqOc;
-
-          // Operational group selector for Avianca / Latam
-          let groupSelectorHtml = "";
-          if (groups.length > 0) {
-            groupSelectorHtml = `
-              <div class="flex items-center gap-1 mt-1 pt-1 border-t border-slate-100">
-                <span class="text-[10px] text-indigo-700 w-10 font-bold">Grupo:</span>
-                <select id="select-group-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'area_group', this.value)" class="text-[11px] bg-indigo-50/80 border border-indigo-200 rounded px-1.5 py-0.5 text-indigo-900 font-bold focus:outline-none focus:ring-1 focus:ring-indigo-500 w-32">
-                  <option value="" ${!r.area_group ? 'selected' : ''}>-- Grupo Operativo --</option>
-                  ${groups.map(g => `<option value="${g}" ${r.area_group === g ? 'selected' : ''}>${g}</option>`).join("")}
-                </select>
-              </div>
-            `;
-          }
-
-          rowTr.innerHTML = `
-            <td class="p-2.5 text-center text-slate-400 font-mono text-[11px] font-bold">${idx + 1}</td>
-
-            <td class="p-2.5">
-              <div class="space-y-1.5">
-                <div class="flex items-center gap-1">
-                  <span class="text-[10px] text-slate-400 w-10 font-medium">Tipo:</span>
-                  <select id="select-freq-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="onFreqChange('${r.record_id}', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
-                    <option value="Quincenal" ${r.freq_type === 'Quincenal' ? 'selected' : ''}>Quincenal</option>
-                    <option value="Mensual" ${r.freq_type === 'Mensual' ? 'selected' : ''}>Mensual</option>
-                    <option value="Semanal" ${r.freq_type === 'Semanal' ? 'selected' : ''}>Semanal</option>
-                    <option value="Por Evento" ${r.freq_type === 'Por Evento' ? 'selected' : ''}>Por Evento</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-1">
-                  <span class="text-[10px] text-slate-400 w-10 font-medium">Mes:</span>
-                  <select id="select-month-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'month', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
-                    ${monthOptionsHtml}
-                  </select>
-                </div>
-                <div class="flex items-center gap-1">
-                  <span class="text-[10px] text-slate-400 w-10 font-medium">Corte:</span>
-                  <select id="select-detail-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'period_detail', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold focus:outline-none focus:ring-1 focus:ring-blue-500 w-32">
-                    ${detailOptionsHtml}
-                  </select>
-                </div>
-                ${groupSelectorHtml}
-              </div>
-            </td>
-
-            <td class="p-2.5 bg-sky-50/30 border-x border-sky-100">
-              <div class="space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <label class="inline-flex items-center gap-1.5 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
-                    <input type="checkbox" id="check-step1-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step1', this.checked)" ${r.step1 ? 'checked' : ''} class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
-                    <span id="label-step1-${r.record_id}" class="text-xs font-semibold ${r.step1 ? 'text-sky-800' : 'text-slate-500'}">
-                      ${reqInf ? 'Informe Enviado' : 'Informe / Pre-fac'}
-                    </span>
-                  </label>
-                  ${!reqInf ? '<span class="text-[9px] font-bold text-sky-700 bg-sky-100/80 px-1.5 py-0.2 rounded border border-sky-200" title="Control interno de verificación para prefacturas">Interno</span>' : ''}
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Fecha:</span>
-                  <input type="date" id="date-step1-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step1_date || ''}" onchange="updateRecordField('${r.record_id}', 'step1_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Nº Pref:</span>
-                  <input type="text" id="text-pref-num-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="Ej: PF-01" value="${r.pref_num || ''}" oninput="debounceField('${r.record_id}', 'pref_num', this.value)" onchange="updateRecordField('${r.record_id}', 'pref_num', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Valor $:</span>
-                  <input type="text" id="text-pref-val-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="$ 0" value="${formatCurrencyString(r.pref_val)}" oninput="onMoneyInput(this, '${r.record_id}', 'pref_val')" onblur="onMoneyBlur(this, '${r.record_id}', 'pref_val')" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold w-32 focus:outline-none focus:ring-1 focus:ring-sky-500">
-                </div>
-
-                <!-- Upload / View Report Document -->
-                <div class="pt-1">
-                  ${r.report_doc_url ? `
-                    <div class="flex items-center gap-1">
-                      <a href="${r.report_doc_url}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-sky-100 text-sky-800 hover:bg-sky-200 border border-sky-300 transition" title="Ver informe adjunto">
-                        <i class="fa-solid fa-file-excel text-emerald-600"></i>
-                        <span>Ver Informe</span>
-                      </a>
-                      ${!isViewer ? `
-                        <button onclick="deleteUploadedFile('${r.record_id}', 'report_doc')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar informe">
-                          <i class="fa-solid fa-xmark"></i>
-                        </button>
-                      ` : ''}
-                    </div>
-                  ` : (!isViewer ? `
-                    <label class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer transition">
-                      <i class="fa-solid fa-paperclip text-slate-500"></i>
-                      <span>Adjuntar Informe</span>
-                      <input type="file" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'report_doc')">
-                    </label>
-                  ` : '')}
-                </div>
-
-                <div id="pref-badge-${r.record_id}"></div>
-              </div>
-            </td>
-
-            <td class="p-2.5 bg-amber-50/30 border-r border-amber-100">
-              <div class="space-y-1.5">
-                <div class="flex items-center justify-between">
-                  <label class="inline-flex items-center gap-1.5 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
-                    <input type="checkbox" id="check-step2-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step2', this.checked)" ${r.step2 ? 'checked' : ''} class="w-4 h-4 rounded text-amber-600 focus:ring-amber-500">
-                    <span id="label-step2-${r.record_id}" class="text-xs font-semibold ${r.step2 ? 'text-amber-800' : 'text-slate-500'}">OC / Aprobación</span>
-                  </label>
-                  ${!reqOc ? '<span class="text-[9px] font-medium text-amber-700 bg-amber-100/70 px-1.5 py-0.2 rounded" title="Orden de compra no obligatoria para facturar">Opcional</span>' : ''}
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Nº OC:</span>
-                  <input type="text" id="text-oc-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="Nº OC / HES" value="${r.step2_oc || ''}" oninput="debounceField('${r.record_id}', 'step2_oc', this.value)" onchange="updateRecordField('${r.record_id}', 'step2_oc', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-semibold w-32 focus:outline-none focus:ring-1 focus:ring-amber-500">
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Fecha:</span>
-                  <input type="date" id="date-oc-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step2_date || ''}" onchange="updateRecordField('${r.record_id}', 'step2_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-amber-500">
-                </div>
-                <div id="oc-badge-${r.record_id}"></div>
-              </div>
-            </td>
-
-            <td class="p-2.5 bg-emerald-50/30 border-r border-emerald-100">
-              <div class="space-y-1.5">
-                <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
-                  <input type="checkbox" id="check-step3-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step3', this.checked)" ${r.step3 ? 'checked' : ''} class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
-                  <span id="label-step3-${r.record_id}" class="text-xs font-semibold ${r.step3 ? 'text-emerald-800' : 'text-slate-500'}">Factura Generada</span>
-                </label>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">F. Gen:</span>
-                  <input type="date" id="date-fac-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step3_date || ''}" onchange="updateRecordField('${r.record_id}', 'step3_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Nº Fac:</span>
-                  <input type="text" id="text-fac-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="Nº Factura(s)" value="${r.step3_fac || ''}" oninput="debounceField('${r.record_id}', 'step3_fac', this.value)" onchange="updateRecordField('${r.record_id}', 'step3_fac', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <span class="text-[10px] text-slate-500 w-12 font-medium">Valor $:</span>
-                  <input type="text" id="text-fac-val-${r.record_id}" ${isViewer ? 'disabled' : ''} placeholder="$ 0" value="${formatCurrencyString(r.fac_val)}" oninput="onMoneyInput(this, '${r.record_id}', 'fac_val')" onblur="onMoneyBlur(this, '${r.record_id}', 'fac_val')" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-800 font-bold w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
-                </div>
-
-                <!-- Upload / View Invoice PDF -->
-                <div class="pt-1">
-                  ${r.fac_pdf_url ? `
-                    <div class="flex items-center gap-1">
-                      <a href="${r.fac_pdf_url}" target="_blank" class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-bold rounded bg-emerald-100 text-emerald-800 hover:bg-emerald-200 border border-emerald-300 transition" title="Ver Factura PDF">
-                        <i class="fa-solid fa-file-pdf text-red-600"></i>
-                        <span>Ver Factura PDF</span>
-                      </a>
-                      ${!isViewer ? `
-                        <button onclick="deleteUploadedFile('${r.record_id}', 'fac_pdf')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar PDF">
-                          <i class="fa-solid fa-xmark"></i>
-                        </button>
-                      ` : ''}
-                    </div>
-                  ` : (!isViewer ? `
-                    <label class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer transition">
-                      <i class="fa-solid fa-paperclip text-slate-500"></i>
-                      <span>Adjuntar Factura PDF</span>
-                      <input type="file" accept=".pdf,image/*" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'fac_pdf')">
-                    </label>
-                  ` : '')}
-                </div>
-
-                <div id="fac-badge-${r.record_id}"></div>
-                <div id="diff-badge-${r.record_id}"></div>
-              </div>
-            </td>
-
-            <td class="p-2.5 bg-purple-50/30 border-r border-purple-100">
-              <div class="space-y-1.5">
-                <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
-                  <input type="checkbox" id="check-step4-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step4', this.checked)" ${r.step4 ? 'checked' : ''} class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500">
-                  <span id="label-step4-${r.record_id}" class="text-xs font-semibold ${r.step4 ? 'text-purple-800' : 'text-slate-500'}">Radicado / Enviado</span>
-                </label>
-                <div class="text-[10px] text-slate-600 font-semibold flex items-center gap-1" title="${c.canal || ''}">
-                  <i class="fa-solid fa-paper-plane text-purple-500 text-[10px]"></i>
-                  <span class="truncate max-w-[140px]">${c.canal || 'Correo'}</span>
-                </div>
-              </div>
-            </td>
-
-            <td class="p-2.5 text-center">
-              <span id="status-badge-${r.record_id}" class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.cls} shadow-2xs">
-                ${st.text}
-              </span>
-            </td>
-
-            <td class="p-2.5">
-              <textarea id="text-notes-${r.record_id}" ${isViewer ? 'disabled' : ''} rows="2" placeholder="Notas u observaciones..." oninput="debounceField('${r.record_id}', 'notes', this.value)" onchange="updateRecordField('${r.record_id}', 'notes', this.value)" class="text-[11px] w-full bg-white border border-slate-200 rounded p-1.5 text-slate-700 focus:outline-none focus:ring-1 focus:ring-blue-500 resize-none">${r.notes || ''}</textarea>
-            </td>
-
-            <td class="p-2.5 text-center ${isViewer ? 'hidden' : ''}">
-              ${cRecords.length > 1 ? `
-                <button onclick="deleteRecord('${r.record_id}', '${c.name.replace(/'/g, "\\'")}', this)" title="Eliminar este registro secundario" class="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 border border-transparent hover:border-rose-200 transition">
-                  <i class="fa-regular fa-trash-can text-sm"></i>
-                </button>
-              ` : `
-                <span class="text-slate-300 text-xs" title="Fila principal base">•</span>
-              `}
-            </td>
-          `;
-
-          tbody.appendChild(rowTr);
-          updateRowBadges(r.record_id);
-        });
-
-        tableContainer.appendChild(table);
-        card.appendChild(tableContainer);
+        const card = buildClientCardElement(c);
         container.appendChild(card);
-
         updateClientHeaderSummary(c.id);
       });
     }
 
     // ==========================================
-    // RENDER PRE-FACTURAS TRACKING TABLE
+    // COMMIT CURRENT ROW TO CONSOLIDATED & RESET CAPTURE
+    // ==========================================
+    async function commitAndResetClientRecord(recordId, clientId, btnEl) {
+      if (!currentUser || currentUser.role === "viewer") {
+        alert("El usuario invitado no tiene permisos para registrar información.");
+        return;
+      }
+
+      const freqEl = document.getElementById(`select-freq-${recordId}`);
+      const monthEl = document.getElementById(`select-month-${recordId}`);
+      const detailEl = document.getElementById(`select-detail-${recordId}`);
+      const groupEl = document.getElementById(`select-group-${recordId}`);
+      const step1Check = document.getElementById(`check-step1-${recordId}`);
+      const step1Date = document.getElementById(`date-step1-${recordId}`);
+      const prefNum = document.getElementById(`text-pref-num-${recordId}`);
+      const prefVal = document.getElementById(`text-pref-val-${recordId}`);
+      const step2Check = document.getElementById(`check-step2-${recordId}`);
+      const step2Oc = document.getElementById(`text-oc-${recordId}`);
+      const step2Date = document.getElementById(`date-oc-${recordId}`);
+      const step3Check = document.getElementById(`check-step3-${recordId}`);
+      const step3Fac = document.getElementById(`text-fac-${recordId}`);
+      const step3Date = document.getElementById(`date-fac-${recordId}`);
+      const facVal = document.getElementById(`text-fac-val-${recordId}`);
+      const step4Check = document.getElementById(`check-step4-${recordId}`);
+      const notesEl = document.getElementById(`text-notes-${recordId}`);
+
+      const existingRec = allRecords.find(r => r.record_id === recordId) || {};
+
+      const payload = {
+        record_id: recordId,
+        client_id: clientId,
+        freq_type: freqEl ? freqEl.value : (existingRec.freq_type || "Quincenal"),
+        month: monthEl ? monthEl.value : (existingRec.month || "Octubre"),
+        period_detail: detailEl ? detailEl.value : (existingRec.period_detail || "1Q (1-15)"),
+        area_group: groupEl ? groupEl.value : (existingRec.area_group || ""),
+        step1: step1Check ? step1Check.checked : Boolean(existingRec.step1),
+        step1_date: step1Date ? step1Date.value : (existingRec.step1_date || ""),
+        pref_num: prefNum ? prefNum.value.trim() : (existingRec.pref_num || ""),
+        pref_val: prefVal ? prefVal.value.trim() : (existingRec.pref_val || ""),
+        step2: step2Check ? step2Check.checked : Boolean(existingRec.step2),
+        step2_oc: step2Oc ? step2Oc.value.trim() : (existingRec.step2_oc || ""),
+        step2_date: step2Date ? step2Date.value : (existingRec.step2_date || ""),
+        oc_val: "",
+        step3: step3Check ? step3Check.checked : Boolean(existingRec.step3),
+        step3_fac: step3Fac ? step3Fac.value.trim() : (existingRec.step3_fac || ""),
+        step3_date: step3Date ? step3Date.value : (existingRec.step3_date || ""),
+        fac_val: facVal ? facVal.value.trim() : (existingRec.fac_val || ""),
+        step4: step4Check ? step4Check.checked : Boolean(existingRec.step4),
+        step4_date: "",
+        notes: notesEl ? notesEl.value.trim() : (existingRec.notes || ""),
+        fac_pdf_url: existingRec.fac_pdf_url || "",
+        report_doc_url: existingRec.report_doc_url || "",
+        author: currentUser ? currentUser.name : "Usuario"
+      };
+
+      const hasData = payload.step1 || payload.pref_num || (payload.pref_val && parseMoney(payload.pref_val) > 0) ||
+                      payload.step2 || payload.step2_oc ||
+                      payload.step3 || payload.step3_fac || (payload.fac_val && parseMoney(payload.fac_val) > 0) ||
+                      payload.step4 || payload.fac_pdf_url || payload.report_doc_url || payload.notes;
+
+      if (!hasData) {
+        alert("Por favor diligencie algún dato de la factura o pre-factura antes de enviar al registro.");
+        return;
+      }
+
+      if (btnEl) {
+        btnEl.disabled = true;
+        btnEl.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Guardando...</span>';
+      }
+      setSaveStatus("saving", "Enviando al registro...");
+
+      try {
+        const res = await fetch("/api/records/commit_and_reset", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          allRecords = allRecords.filter(r => r.record_id !== data.committed_record.record_id && r.record_id !== data.clean_record.record_id);
+          allRecords.push(data.committed_record);
+          allRecords.push(data.clean_record);
+
+          renderSingleClientSection(clientId);
+          renderPrefacturasTable();
+          renderFacturasTable();
+          renderIndependentMatrixTable();
+          updateKPIs();
+
+          setSaveStatus("saved");
+          showToast(`✓ Registro guardado y consolidado con éxito. Campos listos para nueva facturación.`);
+        } else {
+          alert(data.detail || "Error al enviar al registro.");
+          setSaveStatus("error");
+        }
+      } catch(err) {
+        alert("Error de conexión al enviar al registro.");
+        setSaveStatus("error");
+      } finally {
+        if (btnEl) {
+          btnEl.disabled = false;
+          btnEl.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-xs"></i> <span>Enviar a Registro</span>';
+        }
+      }
+    }
+
+    // ==========================================
+    // MODAL DE EDICIÓN Y ELIMINACIÓN COMPLETA
+    // ==========================================
+    function openEditRecordModal(recordId) {
+      if (!recordId) return;
+      const rec = allRecords.find(r => r.record_id === recordId);
+      if (!rec) return;
+
+      const c = allClients.find(cl => cl.id === rec.client_id) || CLIENTS_MASTER.find(cl => cl.id === rec.client_id) || { name: rec.client_name, id: rec.client_id };
+      const groups = getOperationalGroupsForClient(c.name, c.id);
+
+      document.getElementById("editModalClientTitle").innerText = c.name;
+      document.getElementById("editModalRecordSubtitle").innerText = `Registro ID: ${rec.record_id} | ${rec.month || 'Octubre'} - ${rec.period_detail || ''}`;
+      document.getElementById("editRecId").value = rec.record_id;
+      document.getElementById("editRecClientId").value = rec.client_id;
+      document.getElementById("editRecFreq").value = rec.freq_type || "Quincenal";
+
+      const monthSel = document.getElementById("editRecMonth");
+      monthSel.innerHTML = MONTHS_LIST.map(m => `<option value="${m}" ${rec.month === m ? 'selected' : ''}>${m}</option>`).join("");
+
+      const detailSel = document.getElementById("editRecPeriodDetail");
+      const detailOpts = getDetailOptionsForFreq(rec.freq_type || "Quincenal");
+      detailSel.innerHTML = detailOpts.map(d => `<option value="${d}" ${rec.period_detail === d ? 'selected' : ''}>${d}</option>`).join("");
+
+      const groupSel = document.getElementById("editRecAreaGroup");
+      groupSel.innerHTML = `<option value="">-- Sin Grupo --</option>` + groups.map(g => `<option value="${g}" ${rec.area_group === g ? 'selected' : ''}>${g}</option>`).join("");
+
+      document.getElementById("editRecStep1").checked = Boolean(rec.step1);
+      document.getElementById("editRecStep1Date").value = rec.step1_date || "";
+      document.getElementById("editRecPrefNum").value = rec.pref_num || "";
+      document.getElementById("editRecPrefVal").value = formatCurrencyString(rec.pref_val);
+      document.getElementById("editRecReportDocUrl").value = rec.report_doc_url || "";
+
+      const reportInfo = document.getElementById("editRecReportDocInfo");
+      const reportBtnText = document.getElementById("editRecReportBtnText");
+      const reportRemoveBtn = document.getElementById("editRecReportRemoveBtn");
+      if (rec.report_doc_url) {
+        reportInfo.innerHTML = `<a href="${rec.report_doc_url}" target="_blank" class="font-bold text-sky-800 hover:underline"><i class="fa-solid fa-file-excel text-emerald-600"></i> Archivo adjunto actual</a>`;
+        reportBtnText.innerText = "Cambiar Informe";
+        reportRemoveBtn.classList.remove("hidden");
+      } else {
+        reportInfo.innerText = "Sin archivo de informe";
+        reportBtnText.innerText = "Subir Informe";
+        reportRemoveBtn.classList.add("hidden");
+      }
+
+      document.getElementById("editRecStep2").checked = Boolean(rec.step2);
+      document.getElementById("editRecStep2Oc").value = rec.step2_oc || "";
+      document.getElementById("editRecStep2Date").value = rec.step2_date || "";
+
+      document.getElementById("editRecStep3").checked = Boolean(rec.step3);
+      document.getElementById("editRecStep3Date").value = rec.step3_date || "";
+      document.getElementById("editRecStep3Fac").value = rec.step3_fac || "";
+      document.getElementById("editRecFacVal").value = formatCurrencyString(rec.fac_val);
+      document.getElementById("editRecFacPdfUrl").value = rec.fac_pdf_url || "";
+
+      const facInfo = document.getElementById("editRecFacPdfInfo");
+      const facBtnText = document.getElementById("editRecFacBtnText");
+      const facRemoveBtn = document.getElementById("editRecFacPdfRemoveBtn");
+      if (rec.fac_pdf_url) {
+        facInfo.innerHTML = `<a href="${rec.fac_pdf_url}" target="_blank" class="font-bold text-emerald-800 hover:underline"><i class="fa-solid fa-file-pdf text-red-600"></i> Factura PDF actual</a>`;
+        facBtnText.innerText = "Cambiar PDF";
+        facRemoveBtn.classList.remove("hidden");
+      } else {
+        facInfo.innerText = "Sin archivo de factura PDF";
+        facBtnText.innerText = "Subir Factura PDF";
+        facRemoveBtn.classList.add("hidden");
+      }
+
+      document.getElementById("editRecStep4").checked = Boolean(rec.step4);
+      document.getElementById("editRecStep4Date").value = rec.step4_date || "";
+      document.getElementById("editRecNotes").value = rec.notes || "";
+
+      document.getElementById("editRecordModal").classList.remove("hidden");
+    }
+
+    function closeEditRecordModal() {
+      const modal = document.getElementById("editRecordModal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function onEditModalFreqChange(freq) {
+      const detailSel = document.getElementById("editRecPeriodDetail");
+      const detailOpts = getDetailOptionsForFreq(freq);
+      detailSel.innerHTML = detailOpts.map(d => `<option value="${d}">${d}</option>`).join("");
+    }
+
+    function formatMoneyInputDirect(el) {
+      el.value = formatCurrencyString(el.value);
+    }
+
+    async function onEditModalFileSelected(event, docType) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const recordId = document.getElementById("editRecId").value;
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("record_id", recordId);
+      formData.append("doc_type", docType);
+      formData.append("author", currentUser ? currentUser.name : "Usuario");
+
+      try {
+        const res = await fetch("/api/files/upload", {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (docType === "report_doc") {
+            document.getElementById("editRecReportDocUrl").value = data.file_url;
+            document.getElementById("editRecReportDocInfo").innerHTML = `<a href="${data.file_url}" target="_blank" class="font-bold text-sky-800 hover:underline"><i class="fa-solid fa-file-excel text-emerald-600"></i> Archivo adjunto actual</a>`;
+            document.getElementById("editRecReportBtnText").innerText = "Cambiar Informe";
+            document.getElementById("editRecReportRemoveBtn").classList.remove("hidden");
+            document.getElementById("editRecStep1").checked = true;
+          } else if (docType === "fac_pdf") {
+            document.getElementById("editRecFacPdfUrl").value = data.file_url;
+            document.getElementById("editRecFacPdfInfo").innerHTML = `<a href="${data.file_url}" target="_blank" class="font-bold text-emerald-800 hover:underline"><i class="fa-solid fa-file-pdf text-red-600"></i> Factura PDF actual</a>`;
+            document.getElementById("editRecFacBtnText").innerText = "Cambiar PDF";
+            document.getElementById("editRecFacPdfRemoveBtn").classList.remove("hidden");
+            document.getElementById("editRecStep3").checked = true;
+          }
+          showToast(`✓ Archivo subido exitosamente`);
+        } else {
+          alert(data.detail || "Error al subir archivo");
+        }
+      } catch(err) {
+        alert("Error de conexión al subir archivo");
+      } finally {
+        event.target.value = "";
+      }
+    }
+
+    function removeEditModalFile(docType) {
+      if (docType === "report_doc") {
+        document.getElementById("editRecReportDocUrl").value = "";
+        document.getElementById("editRecReportDocInfo").innerText = "Sin archivo de informe";
+        document.getElementById("editRecReportBtnText").innerText = "Subir Informe";
+        document.getElementById("editRecReportRemoveBtn").classList.add("hidden");
+      } else if (docType === "fac_pdf") {
+        document.getElementById("editRecFacPdfUrl").value = "";
+        document.getElementById("editRecFacPdfInfo").innerText = "Sin archivo de factura PDF";
+        document.getElementById("editRecFacBtnText").innerText = "Subir Factura PDF";
+        document.getElementById("editRecFacPdfRemoveBtn").classList.add("hidden");
+      }
+    }
+
+    async function submitEditRecord(event) {
+      event.preventDefault();
+      const recId = document.getElementById("editRecId").value;
+      const clientId = parseInt(document.getElementById("editRecClientId").value, 10);
+      const btn = document.getElementById("saveEditRecordBtn");
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin text-xs"></i> <span>Guardando...</span>';
+      }
+
+      const payload = {
+        record_id: recId,
+        freq_type: document.getElementById("editRecFreq").value,
+        month: document.getElementById("editRecMonth").value,
+        period_detail: document.getElementById("editRecPeriodDetail").value,
+        area_group: document.getElementById("editRecAreaGroup").value,
+        step1: document.getElementById("editRecStep1").checked,
+        step1_date: document.getElementById("editRecStep1Date").value,
+        pref_num: document.getElementById("editRecPrefNum").value.trim(),
+        pref_val: document.getElementById("editRecPrefVal").value.trim(),
+        step2: document.getElementById("editRecStep2").checked,
+        step2_oc: document.getElementById("editRecStep2Oc").value.trim(),
+        step2_date: document.getElementById("editRecStep2Date").value,
+        oc_val: "",
+        step3: document.getElementById("editRecStep3").checked,
+        step3_fac: document.getElementById("editRecStep3Fac").value.trim(),
+        step3_date: document.getElementById("editRecStep3Date").value,
+        fac_val: document.getElementById("editRecFacVal").value.trim(),
+        step4: document.getElementById("editRecStep4").checked,
+        step4_date: document.getElementById("editRecStep4Date").value,
+        notes: document.getElementById("editRecNotes").value.trim(),
+        fac_pdf_url: document.getElementById("editRecFacPdfUrl").value,
+        report_doc_url: document.getElementById("editRecReportDocUrl").value,
+        author: currentUser ? currentUser.name : "Usuario"
+      };
+
+      try {
+        const res = await fetch("/api/records/update_full", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload)
+        });
+        const data = await res.json();
+        if (res.ok && data.success && data.record) {
+          const idx = allRecords.findIndex(r => r.record_id === recId);
+          if (idx !== -1) allRecords[idx] = data.record;
+          else allRecords.push(data.record);
+
+          closeEditRecordModal();
+          renderSingleClientSection(clientId);
+          renderPrefacturasTable();
+          renderFacturasTable();
+          renderIndependentMatrixTable();
+          updateKPIs();
+          showToast(`✓ Registro actualizado con éxito`);
+        } else {
+          alert(data.detail || "Error al actualizar registro");
+        }
+      } catch(err) {
+        alert("Error de conexión al actualizar registro");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-check"></i> <span>Guardar Cambios</span>';
+        }
+      }
+    }
+
+    async function confirmDeleteFromEditModal() {
+      const recId = document.getElementById("editRecId").value;
+      const clientId = parseInt(document.getElementById("editRecClientId").value, 10);
+      if (!recId) return;
+
+      if (!confirm("¿Estás seguro de ELIMINAR DEFINITIVAMENTE este registro de facturación de todo el sistema? Esta acción borrará la información de la prefactura, factura y matriz.")) {
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/records/${recId}?user=${encodeURIComponent(currentUser ? currentUser.name : 'Usuario')}`, {
+          method: "DELETE"
+        });
+        const data = await res.json();
+        if (res.ok && data.success) {
+          if (data.reset_clean && data.record) {
+            const idx = allRecords.findIndex(r => r.record_id === recId);
+            if (idx !== -1) allRecords[idx] = data.record;
+          } else {
+            allRecords = allRecords.filter(r => r.record_id !== recId);
+          }
+
+          closeEditRecordModal();
+          renderSingleClientSection(clientId);
+          renderPrefacturasTable();
+          renderFacturasTable();
+          renderIndependentMatrixTable();
+          updateKPIs();
+          showToast(`✓ Registro eliminado definitivamente de todo el sistema`);
+        } else {
+          alert(data.detail || "Error al eliminar registro");
+        }
+      } catch(err) {
+        alert("Error de conexión al eliminar registro");
+      }
+    }
+
+    // ==========================================
+    // RENDER PRE-FACTURAS TRACKING TABLE (READ ONLY + EDIT MODAL)
     // ==========================================
     function renderPrefacturasTable() {
       const tbody = document.getElementById("prefacturasTableBody");
@@ -2772,11 +3511,11 @@
       const searchInput = document.getElementById("prefSearchInput");
       const searchQ = searchInput ? searchInput.value.toLowerCase().trim() : "";
       const filterSelect = document.getElementById("prefFilterSelect");
-      const filterMode = filterSelect ? filterSelect.value : "all"; // "all", "registered", "pending"
+      const filterMode = filterSelect ? filterSelect.value : "all";
 
       const prefRows = allRecords.filter(r => {
         const c = clientMap[r.client_id] || { name: r.client_name };
-        const hasPref = (r.pref_num && String(r.pref_num).trim()) || (r.pref_val && String(r.pref_val).trim()) || r.report_doc_url;
+        const hasPref = (r.pref_num && String(r.pref_num).trim()) || (r.pref_val && String(r.pref_val).trim()) || r.report_doc_url || r.step1;
 
         if (filterMode === "registered" && !hasPref) return false;
         if (filterMode === "pending" && hasPref) return false;
@@ -2800,8 +3539,6 @@
           totalPrefVal += pVal;
           countPref++;
         }
-
-        const isViewer = currentUser ? currentUser.role === "viewer" : true;
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-sky-50/30 border-b border-slate-100 transition";
@@ -2827,45 +3564,36 @@
             ${r.area_group ? `<span class="px-2 py-0.5 text-[10px] font-extrabold rounded bg-indigo-100 text-indigo-800 border border-indigo-200">${r.area_group}</span>` : '<span class="text-slate-400">-</span>'}
           </td>
           <td class="p-2.5 text-slate-600 font-medium">${r.month} - ${r.period_detail}</td>
-          <td class="p-2.5 bg-sky-50/50">
-            <input type="text" value="${r.pref_num || ''}" placeholder="Ej: PF-01" ${isViewer ? 'disabled' : ''} oninput="debounceField('${r.record_id}', 'pref_num', this.value)" onchange="updateRecordField('${r.record_id}', 'pref_num', this.value)" class="text-[11px] font-bold text-sky-900 bg-white border border-sky-200 rounded px-1.5 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-sky-500">
+          <td class="p-2.5 bg-sky-50/50 font-bold text-sky-950 font-mono">
+            ${r.pref_num || '<span class="text-slate-400 font-normal italic">-</span>'}
           </td>
-          <td class="p-2.5 bg-sky-50/50 text-right">
-            <input type="text" value="${formatCurrencyString(r.pref_val)}" placeholder="$ 0" ${isViewer ? 'disabled' : ''} oninput="onMoneyInput(this, '${r.record_id}', 'pref_val')" onblur="onMoneyBlur(this, '${r.record_id}', 'pref_val')" class="text-[11px] font-mono font-bold text-sky-950 text-right bg-white border border-sky-200 rounded px-1.5 py-0.5 w-28 focus:outline-none focus:ring-1 focus:ring-sky-500">
+          <td class="p-2.5 bg-sky-50/50 text-right font-mono font-bold text-sky-950">
+            ${formatCurrencyString(r.pref_val) || '$ 0'}
+          </td>
+          <td class="p-2.5 text-center font-mono text-slate-600 text-[11px]">
+            ${r.step1_date || '-'}
           </td>
           <td class="p-2.5 text-center">
-            <input type="date" value="${r.step1_date || ''}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step1_date', this.value)" class="text-[10px] bg-white border border-slate-200 rounded px-1 py-0.5 text-slate-700 w-28 focus:outline-none focus:ring-1 focus:ring-sky-500">
-          </td>
-          <td class="p-2.5 text-center">
-            <label class="inline-flex items-center gap-1.5 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
-              <input type="checkbox" ${isViewer ? 'disabled' : ''} ${r.step1 ? 'checked' : ''} onchange="updateRecordField('${r.record_id}', 'step1', this.checked)" class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
-              <span class="text-[10px] font-bold ${r.step1 ? 'text-emerald-700' : 'text-amber-600'}">
-                ${r.step1 ? 'Verificado' : 'Pendiente'}
-              </span>
-            </label>
+            <span class="inline-block px-2 py-0.5 rounded text-[10px] font-bold ${r.step1 ? 'bg-emerald-100 text-emerald-800 border border-emerald-200' : 'bg-amber-100 text-amber-800 border border-amber-200'}">
+              ${r.step1 ? '✓ Verificado' : 'Pendiente'}
+            </span>
           </td>
           <td class="p-2.5">${compHtml}</td>
           <td class="p-2.5 text-center">
             ${r.report_doc_url ? `
-              <div class="flex items-center justify-center gap-1">
-                <a href="${r.report_doc_url}" target="_blank" class="px-2 py-1 rounded bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold border border-sky-300 inline-flex items-center gap-1 text-[10px]">
-                  <i class="fa-solid fa-file-excel text-emerald-600"></i> Ver Informe
-                </a>
-                ${!isViewer ? `
-                  <button onclick="deleteUploadedFile('${r.record_id}', 'report_doc')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar informe">
-                    <i class="fa-solid fa-xmark"></i>
-                  </button>
-                ` : ''}
-              </div>
-            ` : (!isViewer ? `
-              <label class="px-2 py-1 rounded bg-slate-100 hover:bg-slate-200 text-slate-600 font-semibold border border-slate-300 cursor-pointer inline-flex items-center gap-1 text-[10px]">
-                <i class="fa-solid fa-cloud-arrow-up"></i> Subir
-                <input type="file" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'report_doc')">
-              </label>
-            ` : '<span class="text-slate-400">-</span>')}
+              <a href="${r.report_doc_url}" target="_blank" class="px-2 py-1 rounded bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold border border-sky-300 inline-flex items-center gap-1 text-[10px]">
+                <i class="fa-solid fa-file-excel text-emerald-600"></i> Ver Informe
+              </a>
+            ` : '<span class="text-slate-400">-</span>'}
           </td>
-          <td class="p-2.5 text-slate-500 text-[11px]">
-            <input type="text" value="${r.notes || ''}" placeholder="Notas..." ${isViewer ? 'disabled' : ''} oninput="debounceField('${r.record_id}', 'notes', this.value)" onchange="updateRecordField('${r.record_id}', 'notes', this.value)" class="text-[11px] bg-transparent border-0 border-b border-transparent hover:border-slate-200 focus:border-blue-400 w-full text-slate-700 focus:outline-none">
+          <td class="p-2.5 text-slate-600 text-[11px] truncate max-w-[150px]">
+            ${r.notes || '-'}
+          </td>
+          <td class="p-2.5 text-center">
+            <button type="button" onclick="openEditRecordModal('${r.record_id}')" class="px-2.5 py-1 text-xs font-bold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs inline-flex items-center gap-1 transition active:scale-95 cursor-pointer" title="Editar este registro">
+              <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+              <span>Editar</span>
+            </button>
           </td>
         `;
 
@@ -2881,7 +3609,7 @@
     }
 
     // ==========================================
-    // RENDER FACTURAS & ÓRDENES TRACKING TABLE
+    // RENDER FACTURAS & ÓRDENES TRACKING TABLE (READ ONLY + EDIT MODAL)
     // ==========================================
     function renderFacturasTable() {
       const tbody = document.getElementById("facturasTableBody");
@@ -2898,9 +3626,8 @@
       const searchInput = document.getElementById("facSearchInput");
       const searchQ = searchInput ? searchInput.value.toLowerCase().trim() : "";
       const filterSelect = document.getElementById("facFilterSelect");
-      const filterMode = filterSelect ? filterSelect.value : "invoiced"; // "all", "invoiced", "pending"
+      const filterMode = filterSelect ? filterSelect.value : "invoiced";
 
-      // Filter records according to search and selection
       const facRows = allRecords.filter(r => {
         const c = clientMap[r.client_id] || { name: r.client_name };
         const hasFac = (r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && String(r.fac_val).trim()) || r.step3;
@@ -2927,8 +3654,6 @@
         }
         if (r.step3_fac && String(r.step3_fac).trim()) countFac++;
 
-        const isViewer = currentUser ? currentUser.role === "viewer" : true;
-
         const tr = document.createElement("tr");
         tr.className = "hover:bg-emerald-50/30 border-b border-slate-100 transition";
 
@@ -2942,7 +3667,7 @@
             ${r.area_group ? `<span class="px-2 py-0.5 text-[10px] font-extrabold rounded bg-indigo-100 text-indigo-800 border border-indigo-200">${r.area_group}</span>` : '<span class="text-slate-400">-</span>'}
           </td>
           <td class="p-2.5 text-slate-600 font-medium">${r.month} - ${r.period_detail}</td>
-          <td class="p-2.5 text-center text-slate-600 font-mono">${r.step3_date || '-'}</td>
+          <td class="p-2.5 text-center text-slate-600 font-mono text-[11px]">${r.step3_date || '-'}</td>
           <td class="p-2.5 bg-emerald-50/50 font-bold text-emerald-950 font-mono">${r.step3_fac || '<span class="text-slate-400 font-normal italic">Sin número</span>'}</td>
           <td class="p-2.5 bg-emerald-50/50 font-mono font-bold text-emerald-950 text-right">${formatCurrencyString(r.fac_val) || '$ 0'}</td>
           <td class="p-2.5 bg-amber-50/40">
@@ -2955,46 +3680,28 @@
           </td>
           <td class="p-2.5 text-center bg-blue-50/20">
             ${r.fac_pdf_url ? `
-              <div class="flex items-center justify-center gap-1">
-                <a href="${r.fac_pdf_url}" target="_blank" class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold border border-emerald-300 inline-flex items-center gap-1.5 text-[10px] shadow-2xs">
-                  <i class="fa-solid fa-file-pdf text-red-600"></i> Ver PDF Factura
-                </a>
-                ${!isViewer ? `
-                  <button onclick="deleteUploadedFile('${r.record_id}', 'fac_pdf')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar PDF">
-                    <i class="fa-solid fa-xmark"></i>
-                  </button>
-                ` : ''}
-              </div>
-            ` : (!isViewer ? `
-              <label class="px-2.5 py-1 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 font-semibold border border-blue-200 cursor-pointer inline-flex items-center gap-1.5 text-[10px] shadow-2xs">
-                <i class="fa-solid fa-cloud-arrow-up text-blue-600"></i> Subir PDF Factura
-                <input type="file" accept=".pdf,image/*" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'fac_pdf')">
-              </label>
-            ` : '<span class="text-slate-400">-</span>')}
+              <a href="${r.fac_pdf_url}" target="_blank" class="px-2.5 py-1 rounded-lg bg-emerald-100 hover:bg-emerald-200 text-emerald-800 font-bold border border-emerald-300 inline-flex items-center gap-1.5 text-[10px] shadow-2xs">
+                <i class="fa-solid fa-file-pdf text-red-600"></i> Ver PDF Factura
+              </a>
+            ` : '<span class="text-slate-400">-</span>'}
           </td>
           <td class="p-2.5 text-center">
             ${r.report_doc_url ? `
-              <div class="flex items-center justify-center gap-1">
-                <a href="${r.report_doc_url}" target="_blank" class="px-2.5 py-1 rounded-lg bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold border border-sky-300 inline-flex items-center gap-1.5 text-[10px]">
-                  <i class="fa-solid fa-file-excel text-emerald-600"></i> Ver Informe
-                </a>
-                ${!isViewer ? `
-                  <button onclick="deleteUploadedFile('${r.record_id}', 'report_doc')" class="text-rose-500 hover:text-rose-700 text-xs p-1" title="Quitar Informe">
-                    <i class="fa-solid fa-xmark"></i>
-                  </button>
-                ` : ''}
-              </div>
-            ` : (!isViewer ? `
-              <label class="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold border border-slate-300 cursor-pointer inline-flex items-center gap-1.5 text-[10px]">
-                <i class="fa-solid fa-file-arrow-up"></i> Subir Informe
-                <input type="file" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'report_doc')">
-              </label>
-            ` : '<span class="text-slate-400">-</span>')}
+              <a href="${r.report_doc_url}" target="_blank" class="px-2.5 py-1 rounded-lg bg-sky-100 hover:bg-sky-200 text-sky-800 font-bold border border-sky-300 inline-flex items-center gap-1.5 text-[10px]">
+                <i class="fa-solid fa-file-excel text-emerald-600"></i> Ver Informe
+              </a>
+            ` : '<span class="text-slate-400">-</span>'}
           </td>
           <td class="p-2.5 text-center">
             ${r.step4 ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">✓ Entregada</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Pend. Envío</span>'}
           </td>
-          <td class="p-2.5 text-slate-500 text-[11px] truncate max-w-[150px]">${r.notes || '-'}</td>
+          <td class="p-2.5 text-slate-600 text-[11px] truncate max-w-[150px]">${r.notes || '-'}</td>
+          <td class="p-2.5 text-center">
+            <button type="button" onclick="openEditRecordModal('${r.record_id}')" class="px-2.5 py-1 text-xs font-bold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs inline-flex items-center gap-1 transition active:scale-95 cursor-pointer" title="Editar este registro">
+              <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+              <span>Editar</span>
+            </button>
+          </td>
         `;
 
         tbody.appendChild(tr);
@@ -3009,7 +3716,7 @@
     }
 
     // ==========================================
-    // RENDER INDEPENDENT INVOICES MATRIX TABLE
+    // RENDER INDEPENDENT INVOICES MATRIX TABLE (READ ONLY + EDIT MODAL)
     // ==========================================
     function renderIndependentMatrixTable() {
       const tbody = document.getElementById("matrixIndependentTableBody");
@@ -3023,7 +3730,6 @@
       let totalMatrixVal = 0;
       let countMatrixFac = 0;
 
-      // Filter all rows that have an invoice number or invoice value
       const invoicesList = allRecords.filter(r => (r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && parseMoney(r.fac_val) > 0));
 
       invoicesList.forEach((r, idx) => {
@@ -3060,6 +3766,12 @@
             <span class="px-2 py-0.5 rounded-full text-[10px] font-bold ${r.step4 ? 'bg-emerald-100 text-emerald-800' : 'bg-blue-100 text-blue-800'}">
               ${r.step4 ? 'Completado' : 'Facturado'}
             </span>
+          </td>
+          <td class="p-2.5 text-center">
+            <button type="button" onclick="openEditRecordModal('${r.record_id}')" class="px-2.5 py-1 text-xs font-bold rounded-xl bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 shadow-2xs inline-flex items-center gap-1 transition active:scale-95 cursor-pointer" title="Editar este registro">
+              <i class="fa-solid fa-pen-to-square text-[10px]"></i>
+              <span>Editar</span>
+            </button>
           </td>
         `;
 
