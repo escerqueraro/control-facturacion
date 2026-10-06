@@ -1251,6 +1251,31 @@
   <!-- SCRIPT LOGIC                               -->
   <!-- ========================================== -->
   <script>
+    // Automatic Cache Invalidation to ensure zero test/mock data persists in user browser:
+    const APP_STORAGE_VERSION = "2026_10_06_PROD_CLEAN_V5";
+    if (localStorage.getItem("app_storage_version") !== APP_STORAGE_VERSION) {
+      console.log("Purgando caché local de versiones anteriores...");
+      localStorage.removeItem("facturacion_records_cache");
+      localStorage.removeItem("facturacion_records_cache_backup");
+      localStorage.removeItem("facturacion_clients_cache");
+      localStorage.removeItem("facturacion_records_last_sync");
+      localStorage.setItem("app_storage_version", APP_STORAGE_VERSION);
+    }
+
+    function sanitizeRecordsArray(recs) {
+      if (!Array.isArray(recs)) return [];
+      return recs.filter(r => {
+        if (!r) return false;
+        if (r.client_id === 99) return false;
+        const name = (r.client_name || "").toUpperCase();
+        if (name.includes("TEST") || name.includes("RECUPERADA")) return false;
+        if ((r.record_id || "").toLowerCase().includes("test")) return false;
+        if (r.pref_num === "PF-RECOV-999" || r.step3_fac === "FAC-RECOV-789") return false;
+        if (r.step3_fac === "FAC-AV-01" || r.step3_fac === "FAC-AV-02" || r.pref_num === "PF-AF-2026-01") return false;
+        return true;
+      });
+    }
+
     // State Variables
     let currentUser = null; // { id, name, username, role, cargo, permissions, theme, filter }
     let globalSelectedMonth = "ALL"; // GLOBAL VIEW: No month restriction!
@@ -1839,12 +1864,20 @@
         if (res.ok) {
           const data = await res.json();
           const rawRecs = data.records || [];
+          
+          // Check if server still has any residual test data from previous runs
+          const hasResidual = rawRecs.some(r => r.client_id === 99 || (r.client_name && r.client_name.includes("TEST")) || r.pref_num === "PF-RECOV-999" || r.step3_fac === "FAC-RECOV-789" || (r.step3_fac && r.step3_fac.startsWith("FAC-AV-")));
+          if (hasResidual) {
+            console.log("Limpiando datos de prueba residuales del servidor...");
+            fetch("/api/admin/clean_test_data", { method: "POST" }).catch(() => {});
+          }
+
           const seenIds = new Set();
-          const serverRecs = rawRecs.filter(r => {
+          const serverRecs = sanitizeRecordsArray(rawRecs.filter(r => {
             if (!r || !r.record_id || seenIds.has(r.record_id)) return false;
             seenIds.add(r.record_id);
             return true;
-          });
+          }));
 
           const serverScore = countDataScore(serverRecs);
 
@@ -1852,7 +1885,7 @@
           let localBackupRecs = null;
           try {
             const rawBackup = localStorage.getItem("facturacion_records_cache_backup") || localStorage.getItem("facturacion_records_cache");
-            if (rawBackup) localBackupRecs = JSON.parse(rawBackup);
+            if (rawBackup) localBackupRecs = sanitizeRecordsArray(JSON.parse(rawBackup));
           } catch(e) {}
 
           const localScore = countDataScore(localBackupRecs);
@@ -1861,9 +1894,9 @@
           // If server was restarted/spun down and has 0 data, but local browser has user records,
           // DO NOT wipe! Instantly restore local data and re-sync to server!
           if (localScore > 0 && serverScore === 0) {
-            console.warn("Anti-wipe shield triggered: Restoring from local browser vault...");
+            console.warn("Anti-wipe shield triggered: Restoring genuine records from local browser vault...");
             allRecords = localBackupRecs;
-            allClients = data.clients || [];
+            allClients = (data.clients || []).filter(c => c.id !== 99 && !c.name.includes("TEST"));
             renderTable();
             renderPrefacturasTable();
             renderFacturasTable();
@@ -1876,7 +1909,7 @@
           }
 
           allRecords = serverRecs;
-          allClients = data.clients || [];
+          allClients = (data.clients || []).filter(c => c.id !== 99 && !c.name.includes("TEST"));
 
           try {
             localStorage.setItem("facturacion_records_cache", JSON.stringify(allRecords));
@@ -1901,8 +1934,8 @@
         const cachedC = localStorage.getItem("facturacion_clients_cache");
         if (cachedR) {
           try {
-            allRecords = JSON.parse(cachedR);
-            allClients = cachedC ? JSON.parse(cachedC) : [];
+            allRecords = sanitizeRecordsArray(JSON.parse(cachedR));
+            allClients = cachedC ? JSON.parse(cachedC).filter(c => c.id !== 99 && !c.name.includes("TEST")) : [];
             renderTable();
             renderPrefacturasTable();
             renderFacturasTable();
@@ -4538,7 +4571,11 @@
           if (!silent) alert("No se encontró caché local para sincronizar.");
           return;
         }
-        const cachedRecs = JSON.parse(cachedRaw);
+        const cachedRecs = sanitizeRecordsArray(JSON.parse(cachedRaw));
+        if (!cachedRecs || cachedRecs.length === 0) {
+          if (!silent) alert("No se encontraron registros válidos para sincronizar.");
+          return;
+        }
         setSaveStatus("saving", "Restaurando datos...");
 
         const res = await fetch("/api/sync/client_cache", {

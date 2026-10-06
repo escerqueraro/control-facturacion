@@ -299,6 +299,33 @@ def init_db():
                 """, (cid, col, now_iso))
         conn.commit()
 
+    # Automatic Cleanup of any residual test / mock data on startup
+    cursor.execute("DELETE FROM clients WHERE id = 99 OR name LIKE '%TEST%' OR name LIKE '%RECUPERADA%'")
+    cursor.execute("""
+    DELETE FROM billing_records 
+    WHERE client_id = 99 
+       OR client_name LIKE '%TEST%' 
+       OR client_name LIKE '%RECUPERADA%' 
+       OR record_id LIKE '%test%'
+       OR pref_num IN ('PF-RECOV-999', 'PF-AF-2026-01')
+       OR step3_fac IN ('FAC-RECOV-789', 'FAC-AV-01', 'FAC-AV-02')
+    """)
+    cursor.execute("""
+    DELETE FROM billing_records 
+    WHERE client_id = 5 AND record_id != 'rec_5_default' AND (step3_fac LIKE 'FAC-AV%' OR fac_val LIKE '%15.000.000%' OR fac_val LIKE '%28.500.000%')
+    """)
+    cursor.execute("""
+    UPDATE billing_records
+    SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
+        step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
+        step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+        fac_pdf_url = '', report_doc_url = '',
+        step4 = 0, step4_date = '', notes = ''
+    WHERE record_id IN ('rec_1_default', 'rec_5_default') AND (pref_num = 'PF-AF-2026-01' OR step3_fac = 'FAC-AV-01' OR fac_val = '$ 4.500.000')
+    """)
+    cursor.execute("DELETE FROM uploaded_files_archive WHERE filename LIKE '%test%' OR record_id LIKE '%test%' OR record_id = 'rec_test_recovery'")
+    conn.commit()
+
     conn.close()
 
 init_db()
@@ -812,8 +839,8 @@ def get_records(month: Optional[str] = None):
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
-    # Load clients from clients table
-    cursor.execute("SELECT * FROM clients ORDER BY id ASC")
+    # Load clients from clients table (excluding any test companies)
+    cursor.execute("SELECT * FROM clients WHERE id != 99 AND name NOT LIKE '%TEST%' ORDER BY id ASC")
     c_rows = cursor.fetchall()
     client_dict = {}
     for c in c_rows:
@@ -833,14 +860,14 @@ def get_records(month: Optional[str] = None):
         }
 
     if month and month != "ALL":
-        cursor.execute("SELECT * FROM billing_records WHERE month = ? ORDER BY client_id ASC, record_id ASC", (month,))
+        cursor.execute("SELECT * FROM billing_records WHERE month = ? AND client_id != 99 AND client_name NOT LIKE '%TEST%' AND record_id NOT LIKE '%test%' ORDER BY client_id ASC, record_id ASC", (month,))
     else:
-        cursor.execute("SELECT * FROM billing_records ORDER BY client_id ASC, record_id ASC")
+        cursor.execute("SELECT * FROM billing_records WHERE client_id != 99 AND client_name NOT LIKE '%TEST%' AND record_id NOT LIKE '%test%' ORDER BY client_id ASC, record_id ASC")
     
     rows = cursor.fetchall()
     
     # Also fetch all rows to compute duplicate maps across the entire system
-    cursor.execute("SELECT record_id, client_id, client_name, month, period_detail, pref_num, pref_val, step2_oc, oc_val, step3_fac, fac_val FROM billing_records")
+    cursor.execute("SELECT record_id, client_id, client_name, month, period_detail, pref_num, pref_val, step2_oc, oc_val, step3_fac, fac_val FROM billing_records WHERE client_id != 99 AND client_name NOT LIKE '%TEST%' AND record_id NOT LIKE '%test%'")
     all_rows = cursor.fetchall()
     conn.close()
 
@@ -1561,6 +1588,15 @@ async def sync_client_cache(payload: dict):
         rec_id = r.get("record_id")
         if not rec_id:
             continue
+        cid = r.get("client_id")
+        cname = str(r.get("client_name", "")).upper()
+        pref_num = str(r.get("pref_num", ""))
+        step3_fac = str(r.get("step3_fac", ""))
+
+        # STRICT BLOCK: NEVER insert test or recovery dummy records!
+        if cid == 99 or "TEST" in cname or "RECUPERADA" in cname or "test" in str(rec_id).lower() or pref_num == "PF-RECOV-999" or step3_fac in ["FAC-RECOV-789", "FAC-AV-01", "FAC-AV-02"]:
+            continue
+
         cursor.execute("""
         INSERT OR REPLACE INTO billing_records
         (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date, notes, updated_by, updated_at)
@@ -1579,6 +1615,39 @@ async def sync_client_cache(payload: dict):
     conn.commit()
     conn.close()
     return {"success": True, "synced": synced_count}
+
+@app.post("/api/admin/clean_test_data")
+async def clean_test_data():
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM clients WHERE id = 99 OR name LIKE '%TEST%' OR name LIKE '%RECUPERADA%'")
+    cursor.execute("""
+    DELETE FROM billing_records 
+    WHERE client_id = 99 
+       OR client_name LIKE '%TEST%' 
+       OR client_name LIKE '%RECUPERADA%' 
+       OR record_id LIKE '%test%'
+       OR pref_num IN ('PF-RECOV-999', 'PF-AF-2026-01')
+       OR step3_fac IN ('FAC-RECOV-789', 'FAC-AV-01', 'FAC-AV-02')
+    """)
+    cursor.execute("""
+    DELETE FROM billing_records 
+    WHERE client_id = 5 AND record_id != 'rec_5_default' AND (step3_fac LIKE 'FAC-AV%' OR fac_val LIKE '%15.000.000%' OR fac_val LIKE '%28.500.000%')
+    """)
+    cursor.execute("""
+    UPDATE billing_records
+    SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
+        step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
+        step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+        fac_pdf_url = '', report_doc_url = '',
+        step4 = 0, step4_date = '', notes = ''
+    WHERE record_id IN ('rec_1_default', 'rec_5_default')
+    """)
+    cursor.execute("DELETE FROM uploaded_files_archive WHERE filename LIKE '%test%' OR record_id LIKE '%test%' OR record_id = 'rec_test_recovery'")
+    conn.commit()
+    conn.close()
+    await manager.broadcast({"type": "DATABASE_RESTORED"})
+    return {"success": True, "message": "Datos de prueba purgados completamente"}
 
 # Dynamic Excel Export
 @app.get("/api/export/excel")
