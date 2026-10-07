@@ -19,6 +19,10 @@ BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 UPLOADS_DIR = os.path.join(BASE_DIR, "uploads")
 DB_PATH = os.path.join(BASE_DIR, "facturacion.db")
+
+def get_db_connection():
+    cloud_db.DB_PATH = DB_PATH
+    return cloud_db.get_db()
 os.makedirs(STATIC_DIR, exist_ok=True)
 os.makedirs(UPLOADS_DIR, exist_ok=True)
 
@@ -79,7 +83,7 @@ CLIENTS_MASTER = [
 
 # Database Setup & Migrations
 def init_db():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     # 1. System Users Table
@@ -174,10 +178,15 @@ def init_db():
     # Dynamic Column Migrations (safe, non-destructive)
     def add_col_if_missing(table_name, col_name, col_type):
         try:
-            cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}")
-            conn.commit()
+            if getattr(conn, 'is_pg', False):
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN IF NOT EXISTS {col_name} {col_type}")
+                conn.commit()
+            else:
+                cursor.execute(f"ALTER TABLE {table_name} ADD COLUMN {col_name} {col_type}")
+                conn.commit()
         except Exception:
-            pass
+            if hasattr(conn, 'rollback'):
+                conn.rollback()
 
     add_col_if_missing("billing_records", "area_group", "TEXT DEFAULT ''")
     add_col_if_missing("billing_records", "fac_pdf_url", "TEXT DEFAULT ''")
@@ -370,7 +379,7 @@ class ConnectionManager:
 
     async def broadcast_presence(self):
         try:
-            conn = sqlite3.connect(DB_PATH)
+            conn = get_db_connection()
             conn.row_factory = sqlite3.Row
             cursor = conn.cursor()
             cursor.execute("SELECT id, username, name, role, cargo, is_active FROM system_users ORDER BY id ASC")
@@ -483,7 +492,7 @@ def login(req: LoginRequest):
     pwd = (req.password or "").strip()
     usr = (req.username or "").strip()
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -517,7 +526,7 @@ def login(req: LoginRequest):
 
 @app.post("/api/user/update-profile")
 async def update_profile(req: UpdateProfileRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM system_users WHERE username = ?", (req.username,))
@@ -551,7 +560,7 @@ async def update_profile(req: UpdateProfileRequest):
 # Master Admin Users Management
 @app.get("/api/admin/users")
 def get_admin_users():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, password, name, role, cargo, theme, filter, is_active, permissions FROM system_users ORDER BY id ASC")
@@ -561,7 +570,7 @@ def get_admin_users():
 
 @app.post("/api/admin/users/create")
 def create_admin_user(req: AdminUserCreateRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     perm = req.permissions if req.permissions else "total"
@@ -579,7 +588,7 @@ def create_admin_user(req: AdminUserCreateRequest):
 
 @app.post("/api/admin/users/update")
 async def update_admin_user(req: AdminUserUpdateRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     perm = req.permissions if req.permissions else "total"
@@ -604,7 +613,7 @@ async def update_admin_user(req: AdminUserUpdateRequest):
 
 @app.delete("/api/admin/users/{user_id}")
 def delete_admin_user(user_id: int):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT role FROM system_users WHERE id = ?", (user_id,))
     row = cursor.fetchone()
@@ -622,7 +631,7 @@ def delete_admin_user(user_id: int):
 # Master Admin Clients / Companies Management
 @app.get("/api/admin/clients")
 def get_admin_clients():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM clients ORDER BY id ASC")
@@ -632,7 +641,7 @@ def get_admin_clients():
 
 @app.post("/api/admin/clients/create")
 async def create_admin_client(req: AdminClientCreateRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT MAX(id) FROM clients")
     max_id = cursor.fetchone()[0] or 0
@@ -670,7 +679,7 @@ async def create_admin_client(req: AdminClientCreateRequest):
 
 @app.post("/api/admin/clients/update")
 async def update_admin_client(req: AdminClientUpdateRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("""
     UPDATE clients SET name = ?, prog = ?, freq_type = ?, resp = ?, contact = ?, obs = ?, req_inf = ?, req_oc = ?, canal = ?, key_day = ?, is_blocked = ?
@@ -686,7 +695,7 @@ async def update_admin_client(req: AdminClientUpdateRequest):
 
 @app.post("/api/admin/clients/toggle-block")
 async def toggle_block_client(req: AdminToggleBlockRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("UPDATE clients SET is_blocked = CASE WHEN is_blocked = 1 THEN 0 ELSE 1 END WHERE id = ?", (req.id,))
     cursor.execute("SELECT is_blocked, name FROM clients WHERE id = ?", (req.id,))
@@ -701,7 +710,7 @@ async def toggle_block_client(req: AdminToggleBlockRequest):
 
 @app.delete("/api/admin/clients/{client_id}")
 async def delete_admin_client(client_id: int):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM clients WHERE id = ?", (client_id,))
     cursor.execute("DELETE FROM billing_records WHERE client_id = ?", (client_id,))
@@ -715,7 +724,7 @@ async def delete_admin_client(client_id: int):
 # Cargos Endpoints
 @app.get("/api/cargos")
 def get_cargos():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT title FROM cargos ORDER BY id ASC")
     cargos = [r[0] for r in cursor.fetchall()]
@@ -724,7 +733,7 @@ def get_cargos():
 
 @app.post("/api/cargos/create")
 def create_cargo(req: CargoCreateRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     try:
         cursor.execute("INSERT INTO cargos (title) VALUES (?)", (req.title.strip(),))
@@ -738,7 +747,7 @@ def create_cargo(req: CargoCreateRequest):
 # Matrix Endpoints
 @app.get("/api/matrix")
 def get_matrix_data():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -770,7 +779,7 @@ def get_matrix_data():
 
 @app.post("/api/matrix/update")
 async def update_matrix_cell(req: MatrixUpdateRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -816,7 +825,7 @@ async def update_alias(req: dict):
     updated_by = req.get("updated_by", "Sistema")
     
     if not record_id and client_id:
-        conn = sqlite3.connect(DB_PATH)
+        conn = get_db_connection()
         c = conn.cursor()
         c.execute("SELECT record_id FROM billing_records WHERE client_id = ? ORDER BY record_id ASC LIMIT 1", (client_id,))
         row = c.fetchone()
@@ -836,7 +845,7 @@ async def update_alias(req: dict):
 
 @app.get("/api/records")
 def get_records(month: Optional[str] = None):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -937,7 +946,7 @@ def get_records(month: Optional[str] = None):
 
 @app.post("/api/records/create")
 async def create_record(req: CreateRecordRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT * FROM clients WHERE id = ?", (req.client_id,))
@@ -1027,7 +1036,7 @@ async def update_record_field(req: UpdateRecordFieldRequest):
 
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
 
     sql = f"UPDATE billing_records SET {req.field} = ?, updated_by = ?, updated_at = ? WHERE record_id = ?"
@@ -1076,7 +1085,7 @@ class CommitAndResetRequest(BaseModel):
 
 @app.post("/api/records/commit_and_reset")
 async def commit_and_reset_record(req: CommitAndResetRequest):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1189,7 +1198,7 @@ class UpdateFullRecordRequest(BaseModel):
 @app.post("/api/records/update_full")
 async def update_record_full(req: UpdateFullRecordRequest):
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1232,7 +1241,7 @@ async def update_record_full(req: UpdateFullRecordRequest):
 
 @app.delete("/api/records/{record_id}")
 async def delete_record(record_id: str, user: str = "Sistema"):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("SELECT client_id, client_name FROM billing_records WHERE record_id = ?", (record_id,))
     row = cursor.fetchone()
@@ -1318,7 +1327,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 @app.get("/api/presence/status")
 def get_presence_status():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     cursor.execute("SELECT id, username, name, role, cargo, permissions, is_active FROM system_users ORDER BY id ASC")
@@ -1368,7 +1377,7 @@ async def upload_file(
     col_name = "fac_pdf_url" if doc_type == "fac_pdf" else "report_doc_url"
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     # Save binary into uploaded_files_archive table for persistent disaster recovery
     cursor.execute("""
@@ -1435,7 +1444,7 @@ async def delete_file(req: DeleteFileRequest):
     col_name = "fac_pdf_url" if req.doc_type == "fac_pdf" else "report_doc_url"
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute(f"SELECT {col_name} FROM billing_records WHERE record_id = ?", (req.record_id,))
     row = cursor.fetchone()
@@ -1470,7 +1479,7 @@ async def delete_file(req: DeleteFileRequest):
 # Backup, Restore & LocalStorage Sync Endpoints
 @app.get("/api/backup/export")
 def export_backup():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -1507,7 +1516,7 @@ async def import_backup(data: dict):
     if not isinstance(data, dict):
         raise HTTPException(status_code=400, detail="Formato de respaldo inválido")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1581,7 +1590,7 @@ async def sync_client_cache(payload: dict):
     if not records:
         return {"success": True, "synced": 0}
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1620,7 +1629,7 @@ async def sync_client_cache(payload: dict):
 
 @app.post("/api/admin/clean_test_data")
 async def clean_test_data():
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     cursor = conn.cursor()
     cursor.execute("DELETE FROM clients WHERE id = 99 OR name LIKE '%TEST%' OR name LIKE '%RECUPERADA%'")
     cursor.execute("""
@@ -1654,7 +1663,7 @@ async def clean_test_data():
 # Dynamic Excel Export
 @app.get("/api/export/excel")
 def export_excel(month: Optional[str] = "Octubre"):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     if month and month != "ALL":
@@ -1783,7 +1792,7 @@ def get_cloud_status_endpoint():
 # Monthly Closing Report Analysis
 @app.get("/api/reports/monthly_closing")
 def get_monthly_closing_report(month: Optional[str] = "Octubre"):
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
 
@@ -2093,7 +2102,7 @@ def export_closing_excel(month: Optional[str] = "Octubre"):
         c.fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
         c.alignment = Alignment(horizontal="center", vertical="center")
 
-    conn = sqlite3.connect(DB_PATH)
+    conn = get_db_connection()
     conn.row_factory = sqlite3.Row
     cursor = conn.cursor()
     if month and month != "ALL":
@@ -2163,21 +2172,29 @@ def serve_uploaded_file(filename: str):
     if os.path.exists(file_path):
         return FileResponse(file_path)
 
-    conn = sqlite3.connect(DB_PATH)
-    cursor = conn.cursor()
-    cursor.execute("SELECT file_bytes, content_type FROM uploaded_files_archive WHERE filename = ? OR file_url = ?", (filename, f"/uploads/{filename}"))
-    row = cursor.fetchone()
-    conn.close()
+    try:
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT file_bytes, content_type, filename FROM uploaded_files_archive WHERE filename = ? OR file_url = ? OR file_url LIKE ?", (filename, f"/uploads/{filename}", f"%{filename}%"))
+        row = cursor.fetchone()
+        conn.close()
 
-    if row and row[0]:
-        file_bytes = row[0]
-        content_type = row[1] or "application/octet-stream"
-        try:
-            with open(file_path, "wb") as f:
-                f.write(file_bytes)
-        except Exception:
-            pass
-        return Response(content=file_bytes, media_type=content_type)
+        if row and row[0]:
+            raw_bytes = row[0]
+            file_bytes = bytes(raw_bytes) if isinstance(raw_bytes, memoryview) else raw_bytes
+            content_type = row[1] or "application/octet-stream"
+            try:
+                with open(file_path, "wb") as f:
+                    f.write(file_bytes)
+            except Exception:
+                pass
+            return Response(
+                content=file_bytes,
+                media_type=content_type,
+                headers={"Content-Disposition": f"inline; filename={filename}"}
+            )
+    except Exception as e:
+        print(f"Error recuperando archivo de la base de datos: {e}")
 
     raise HTTPException(status_code=404, detail="Archivo no encontrado")
 

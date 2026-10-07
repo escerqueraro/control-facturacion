@@ -35,7 +35,7 @@ USE_POSTGRES = bool(DATABASE_URL and HAS_PSYCOPG2 and (
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "facturacion.db")
 
 class CloudRow:
-    """Provides dual access (by key string AND by numeric index) similar to sqlite3.Row."""
+    """Provides dual access (by key string AND by numeric index) identical to sqlite3.Row."""
     def __init__(self, d: dict, t: tuple):
         self._d = d
         self._t = t
@@ -58,25 +58,37 @@ class CloudRow:
         return self._d.items()
 
     def __iter__(self):
+        # Yields tuple elements for positional unpacking: a, b, c = row
         return iter(self._t)
 
     def __contains__(self, key: str):
         return key in self._d
 
+    def __len__(self):
+        return len(self._t)
+
     def __repr__(self):
         return f"<CloudRow {self._d}>"
 
 
-def translate_sql(sql: str, is_pg: bool) -> str:
+def translate_sql(sql: str, is_pg: bool, has_params: bool = False) -> str:
     """Translates SQLite query syntax to PostgreSQL if running on cloud PG."""
     if not is_pg:
         return sql
-    # Replace ? with %s for psycopg2
-    translated = sql.replace("?", "%s")
-    
+
+    translated = sql
+
+    # If query has parameters, escape any literal % (e.g. LIKE '%TEST%') so psycopg2 doesn't try to interpolate it
+    if has_params:
+        # Replace % with %% only where it's not part of an existing %s
+        translated = re.sub(r'%(?!s)', '%%', translated)
+
+    # Replace SQLite parameter placeholder ? with PostgreSQL %s
+    translated = translated.replace("?", "%s")
+
     # SQLite AUTOINCREMENT to SERIAL
     translated = re.sub(r'INTEGER\s+PRIMARY\s+KEY\s+AUTOINCREMENT', 'SERIAL PRIMARY KEY', translated, flags=re.IGNORECASE)
-    
+
     # SQLite BLOB to BYTEA
     translated = re.sub(r'\bBLOB\b', 'BYTEA', translated)
 
@@ -120,18 +132,42 @@ class CloudCursor:
         self.is_pg = is_pg
 
     def execute(self, sql: str, params: tuple = ()):
-        final_sql = translate_sql(sql, self.is_pg)
+        has_params = bool(params)
+        final_sql = translate_sql(sql, self.is_pg, has_params=has_params)
+
         if self.is_pg:
-            # PostgreSQL requires params as tuple or list
-            if not isinstance(params, (tuple, list)):
-                params = (params,)
-            return self._c.execute(final_sql, params)
+            if has_params:
+                # PostgreSQL requires params as tuple or list
+                if not isinstance(params, (tuple, list)):
+                    params = (params,)
+                # Adapt any binary bytes for psycopg2
+                clean_params = []
+                for p in params:
+                    if isinstance(p, (bytes, bytearray)):
+                        clean_params.append(psycopg2.Binary(p))
+                    else:
+                        clean_params.append(p)
+                return self._c.execute(final_sql, tuple(clean_params))
+            else:
+                return self._c.execute(final_sql)
         else:
             return self._c.execute(final_sql, params)
 
     def executemany(self, sql: str, seq_of_parameters):
-        final_sql = translate_sql(sql, self.is_pg)
-        return self._c.executemany(final_sql, seq_of_parameters)
+        final_sql = translate_sql(sql, self.is_pg, has_params=True)
+        if self.is_pg:
+            clean_seq = []
+            for params in seq_of_parameters:
+                clean_params = [psycopg2.Binary(p) if isinstance(p, (bytes, bytearray)) else p for p in params]
+                clean_seq.append(tuple(clean_params))
+            return self._c.executemany(final_sql, clean_seq)
+        else:
+            return self._c.executemany(final_sql, seq_of_parameters)
+
+    def _convert_val(self, val):
+        if isinstance(val, memoryview):
+            return bytes(val)
+        return val
 
     def fetchone(self):
         row = self._c.fetchone()
@@ -139,11 +175,10 @@ class CloudCursor:
             return None
         if self.is_pg:
             col_names = [d[0] for d in self._c.description]
-            d = dict(zip(col_names, row))
-            t = tuple(row)
-            return CloudRow(d, t)
+            clean_row = tuple(self._convert_val(v) for v in row)
+            d = dict(zip(col_names, clean_row))
+            return CloudRow(d, clean_row)
         else:
-            # sqlite3.Row
             return row
 
     def fetchall(self):
@@ -154,9 +189,9 @@ class CloudCursor:
             col_names = [d[0] for d in self._c.description]
             res = []
             for r in rows:
-                d = dict(zip(col_names, r))
-                t = tuple(r)
-                res.append(CloudRow(d, t))
+                clean_row = tuple(self._convert_val(v) for v in r)
+                d = dict(zip(col_names, clean_row))
+                res.append(CloudRow(d, clean_row))
             return res
         else:
             return rows
@@ -173,6 +208,17 @@ class CloudConnection:
     def __init__(self, raw_conn, is_pg: bool):
         self._conn = raw_conn
         self.is_pg = is_pg
+        self._row_factory = None
+
+    @property
+    def row_factory(self):
+        return self._row_factory
+
+    @row_factory.setter
+    def row_factory(self, value):
+        self._row_factory = value
+        if not self.is_pg:
+            self._conn.row_factory = value
 
     def cursor(self):
         return CloudCursor(self._conn.cursor(), self.is_pg)
@@ -190,6 +236,15 @@ class CloudConnection:
         c = self.cursor()
         c.execute(sql, params)
         return c
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if exc_type is not None:
+            self.rollback()
+        else:
+            self.commit()
 
 
 def get_db() -> CloudConnection:

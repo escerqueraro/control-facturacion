@@ -5543,12 +5543,12 @@
           const data = await res.json();
           if (data.use_postgres) {
             badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold shadow-2xs";
-            text.innerHTML = `<i class="fa-solid fa-cloud text-emerald-600"></i> Supabase/Neon Cloud (${data.records_count} filas)`;
-            badge.title = `Conectado a Base de Datos PostgreSQL en la Nube. Storage: ${data.cloud_storage_bucket}`;
+            text.innerHTML = `<i class="fa-solid fa-cloud text-emerald-600"></i> Nube Activa (PostgreSQL/Supabase) 🟢`;
+            badge.title = `Conectado a Base de Datos PostgreSQL permanente en la Nube (${data.records_count} filas registradas). Storage: ${data.cloud_storage_bucket}`;
           } else {
-            badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold shadow-2xs";
-            text.innerHTML = `<i class="fa-solid fa-database text-sky-600"></i> Local SQLite + Backup (${data.records_count} filas)`;
-            badge.title = `Base de Datos local activa con auto-archivo binario. Para conectar Supabase o Neon, configure DATABASE_URL.`;
+            badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-50 text-amber-900 border border-amber-300 text-[11px] font-bold shadow-2xs";
+            text.innerHTML = `<i class="fa-solid fa-triangle-exclamation text-amber-600"></i> SQLite Local (Temporal)`;
+            badge.title = `ADVERTENCIA: Está operando en almacenamiento local temporal (${data.records_count} filas). En Render los archivos se borran al reiniciar. Para persistencia permanente de facturas y archivos, configure la variable DATABASE_URL con Supabase o Neon.`;
           }
         }
       } catch (e) {
