@@ -13,6 +13,7 @@ import io
 import openpyxl
 from openpyxl.styles import Font, Alignment, PatternFill, Border, Side
 from openpyxl.utils import get_column_letter
+import cloud_db
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
@@ -1362,7 +1363,8 @@ async def upload_file(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    file_url = f"/uploads/{unique_name}"
+    cloud_url = await cloud_db.upload_file_to_cloud(content, unique_name, file.content_type or 'application/octet-stream')
+    file_url = cloud_url if cloud_url else f"/uploads/{unique_name}"
     col_name = "fac_pdf_url" if doc_type == "fac_pdf" else "report_doc_url"
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -1767,6 +1769,382 @@ def export_excel(month: Optional[str] = "Octubre"):
     output.seek(0)
 
     filename = f"Control_Facturacion_{month}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+# Cloud Health & Persistence Status
+@app.get("/api/cloud/status")
+def get_cloud_status_endpoint():
+    return cloud_db.get_cloud_status()
+
+# Monthly Closing Report Analysis
+@app.get("/api/reports/monthly_closing")
+def get_monthly_closing_report(month: Optional[str] = "Octubre"):
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    if month and month != "ALL":
+        cursor.execute("SELECT * FROM billing_records WHERE month = ? ORDER BY client_id ASC", (month,))
+    else:
+        cursor.execute("SELECT * FROM billing_records ORDER BY client_id ASC")
+    records = cursor.fetchall()
+
+    cursor.execute("SELECT * FROM clients")
+    clients = {c["id"]: dict(c) for c in cursor.fetchall()}
+    conn.close()
+
+    total_records = len(records)
+    pref_total = 0.0
+    fac_total = 0.0
+
+    step1_done = 0
+    step2_done = 0
+    step3_done = 0
+    step4_done = 0
+
+    bottlenecks = []
+    by_resp = {}
+
+    today = datetime.date.today()
+
+    def parse_money(val_str):
+        if not val_str:
+            return 0.0
+        cleaned = re.sub(r'[^\d]', '', str(val_str))
+        try:
+            return float(cleaned) if cleaned else 0.0
+        except Exception:
+            return 0.0
+
+    def get_days_diff(date_str):
+        if not date_str:
+            return None
+        try:
+            d = datetime.datetime.strptime(date_str[:10], "%Y-%m-%d").date()
+            return (today - d).days
+        except Exception:
+            return None
+
+    for r in records:
+        cid = r["client_id"]
+        c_meta = clients.get(cid, {})
+        resp = c_meta.get("resp", "Sin asignar")
+        req_oc = bool(c_meta.get("req_oc", 1))
+        req_inf = bool(c_meta.get("req_inf", 1))
+
+        p_val = parse_money(r["pref_val"])
+        f_val = parse_money(r["fac_val"])
+        pref_total += p_val
+        fac_total += f_val
+
+        if resp not in by_resp:
+            by_resp[resp] = {
+                "resp": resp,
+                "total": 0,
+                "completed": 0,
+                "invoiced": 0,
+                "waiting_oc": 0,
+                "pending": 0,
+                "pref_sum": 0.0,
+                "fac_sum": 0.0
+            }
+        by_resp[resp]["total"] += 1
+        by_resp[resp]["pref_sum"] += p_val
+        by_resp[resp]["fac_sum"] += f_val
+
+        # Step counts
+        if r["step1"]: step1_done += 1
+        if r["step2"] or not req_oc: step2_done += 1
+        if r["step3"]: step3_done += 1
+        if r["step4"]:
+            step4_done += 1
+            by_resp[resp]["completed"] += 1
+        elif r["step3"]:
+            by_resp[resp]["invoiced"] += 1
+        elif r["step1"] and req_oc and not r["step2"]:
+            by_resp[resp]["waiting_oc"] += 1
+        else:
+            by_resp[resp]["pending"] += 1
+
+        # Check bottlenecks
+        if r["step3"] and not r["step4"]:
+            days = get_days_diff(r["step3_date"]) or 0
+            if days > 2:
+                bottlenecks.append({
+                    "record_id": r["record_id"],
+                    "client_id": cid,
+                    "client_name": r["client_name"],
+                    "resp": resp,
+                    "stage": "Radicación Pendiente",
+                    "days_waiting": days,
+                    "severity": "critical" if days > 5 else "warning",
+                    "amount": f_val or p_val,
+                    "details": f"Factura {r['step3_fac'] or 'emitida'} lleva {days} días sin entrega/radicación."
+                })
+        elif r["step1"] and req_oc and not r["step2"]:
+            days = get_days_diff(r["step1_date"]) or 0
+            if days > 3:
+                bottlenecks.append({
+                    "record_id": r["record_id"],
+                    "client_id": cid,
+                    "client_name": r["client_name"],
+                    "resp": resp,
+                    "stage": "Esperando Orden de Compra",
+                    "days_waiting": days,
+                    "severity": "critical" if days > 7 else "warning",
+                    "amount": p_val,
+                    "details": f"Informe enviado hace {days} días. Cliente aún no expide OC/HES."
+                })
+        elif (r["step2"] or not req_oc) and (r["step1"] or not req_inf) and not r["step3"]:
+            days = get_days_diff(r["step2_date"] or r["step1_date"]) or 0
+            if days > 2:
+                bottlenecks.append({
+                    "record_id": r["record_id"],
+                    "client_id": cid,
+                    "client_name": r["client_name"],
+                    "resp": resp,
+                    "stage": "Facturación Demorada",
+                    "days_waiting": days,
+                    "severity": "critical" if days > 4 else "warning",
+                    "amount": p_val,
+                    "details": f"Aprobación recibida hace {days} días. Pendiente emitir factura contable."
+                })
+
+    diff_val = pref_total - fac_total
+    closing_rate = round((step4_done / total_records * 100), 1) if total_records > 0 else 0.0
+
+    return {
+        "success": True,
+        "month": month,
+        "total_records": total_records,
+        "completed_records": step4_done,
+        "invoiced_records": step3_done,
+        "closing_rate_pct": closing_rate,
+        "totals": {
+            "pref_val": pref_total,
+            "fac_val": fac_total,
+            "diff_val": diff_val,
+            "pref_val_fmt": f"${pref_total:,.0f}".replace(",", "."),
+            "fac_val_fmt": f"${fac_total:,.0f}".replace(",", "."),
+            "diff_val_fmt": f"${diff_val:,.0f}".replace(",", ".")
+        },
+        "funnel": {
+            "step1_pct": round((step1_done / total_records * 100), 1) if total_records else 0,
+            "step2_pct": round((step2_done / total_records * 100), 1) if total_records else 0,
+            "step3_pct": round((step3_done / total_records * 100), 1) if total_records else 0,
+            "step4_pct": round((step4_done / total_records * 100), 1) if total_records else 0,
+            "step1_count": step1_done,
+            "step2_count": step2_done,
+            "step3_count": step3_done,
+            "step4_count": step4_done
+        },
+        "by_resp": list(by_resp.values()),
+        "bottlenecks": sorted(bottlenecks, key=lambda x: (0 if x["severity"] == "critical" else 1, -x["days_waiting"])),
+        "bottlenecks_count": len(bottlenecks)
+    }
+
+# Export Monthly Closing Executive Excel
+@app.get("/api/reports/export_closing_excel")
+def export_closing_excel(month: Optional[str] = "Octubre"):
+    closing_data = get_monthly_closing_report(month)
+    wb = openpyxl.Workbook()
+
+    NAVY = "1E3A8A"
+    STEP1_COL = "0284C7"
+    STEP2_COL = "D97706"
+    STEP3_COL = "059669"
+    STEP4_COL = "7C3AED"
+    GRAY_BG = "F1F5F9"
+    BORDER_COLOR = "CBD5E1"
+
+    border_thin = Border(left=Side(style='thin', color=BORDER_COLOR), right=Side(style='thin', color=BORDER_COLOR),
+                         top=Side(style='thin', color=BORDER_COLOR), bottom=Side(style='thin', color=BORDER_COLOR))
+
+    # --- SHEET 1: RESUMEN EJECUTIVO DE CIERRE ---
+    ws1 = wb.active
+    ws1.title = "Resumen Ejecutivo Cierre"
+
+    ws1.merge_cells("A1:G1")
+    ws1["A1"] = f"TABLERO EJECUTIVO DE CIERRE MENSUAL OPERATIVO - {month.upper()}"
+    ws1["A1"].font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+    ws1["A1"].fill = PatternFill(start_color=NAVY, end_color=NAVY, fill_type="solid")
+    ws1["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws1.row_dimensions[1].height = 35
+
+    # KPI summary cards
+    kpis = [
+        ("TOTAL REGISTROS", f"{closing_data['total_records']}", "475569"),
+        ("TOTAL PREFACTURADO", f"{closing_data['totals']['pref_val_fmt']}", STEP1_COL),
+        ("TOTAL FACTURADO REAL", f"{closing_data['totals']['fac_val_fmt']}", STEP3_COL),
+        ("BRECHA / DIFERENCIA", f"{closing_data['totals']['diff_val_fmt']}", "DC2626" if closing_data['totals']['diff_val'] > 0 else "059669"),
+        ("% AVANCE DE CIERRE", f"{closing_data['closing_rate_pct']}%", STEP4_COL)
+    ]
+
+    ws1.cell(row=3, column=1, value="INDICADORES CLAVE DE DESEMPEÑO (KPIs)").font = Font(name="Calibri", size=11, bold=True, color=NAVY)
+    for idx, (title, val, col) in enumerate(kpis, start=1):
+        cell_t = ws1.cell(row=4, column=idx, value=title)
+        cell_t.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        cell_t.fill = PatternFill(start_color=col, end_color=col, fill_type="solid")
+        cell_t.alignment = Alignment(horizontal="center", vertical="center")
+
+        cell_v = ws1.cell(row=5, column=idx, value=val)
+        cell_v.font = Font(name="Calibri", size=13, bold=True, color="0F172A")
+        cell_v.fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+        cell_v.alignment = Alignment(horizontal="center", vertical="center")
+        cell_v.border = border_thin
+
+    # Responsibility breakdown
+    ws1.cell(row=7, column=1, value="CONCILIACIÓN POR RESPONSABLE ASIGNADO").font = Font(name="Calibri", size=11, bold=True, color=NAVY)
+    resp_headers = ["Responsable", "Clientes Asignados", "Total Prefacturado", "Total Facturado Real", "Completados", "Pendientes", "% Éxito"]
+    for c_idx, h_text in enumerate(resp_headers, start=1):
+        c = ws1.cell(row=8, column=c_idx, value=h_text)
+        c.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="334155", end_color="334155", fill_type="solid")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+
+    curr_row = 9
+    for resp_item in closing_data["by_resp"]:
+        rate = round((resp_item["completed"] / resp_item["total"] * 100), 1) if resp_item["total"] else 0
+        vals = [
+            resp_item["resp"],
+            resp_item["total"],
+            f"${resp_item['pref_sum']:,.0f}".replace(",", "."),
+            f"${resp_item['fac_sum']:,.0f}".replace(",", "."),
+            resp_item["completed"],
+            resp_item["total"] - resp_item["completed"],
+            f"{rate}%"
+        ]
+        for c_idx, v in enumerate(vals, start=1):
+            cell = ws1.cell(row=curr_row, column=c_idx, value=v)
+            cell.font = Font(name="Calibri", size=10, bold=(c_idx == 1 or c_idx == 7))
+            cell.alignment = Alignment(horizontal="center" if c_idx > 1 else "left", vertical="center")
+            cell.border = border_thin
+        curr_row += 1
+
+    # Bottlenecks / Semáforo Crítico
+    curr_row += 1
+    ws1.cell(row=curr_row, column=1, value="SEMÁFORO DE CUELLOS DE BOTELLA Y ALERTAS CRÍTICAS").font = Font(name="Calibri", size=11, bold=True, color="B91C1C")
+    curr_row += 1
+
+    bot_headers = ["Nivel Alerta", "Cliente", "Responsable", "Fase Atascada", "Días Espera", "Valor en Riesgo", "Diagnóstico Operativo"]
+    for c_idx, h_text in enumerate(bot_headers, start=1):
+        c = ws1.cell(row=curr_row, column=c_idx, value=h_text)
+        c.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="991B1B", end_color="991B1B", fill_type="solid")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+    curr_row += 1
+
+    if closing_data["bottlenecks"]:
+        for b in closing_data["bottlenecks"]:
+            sev_badge = "🔴 CRÍTICO" if b["severity"] == "critical" else "🟡 SEGUIMIENTO"
+            b_vals = [
+                sev_badge,
+                b["client_name"],
+                b["resp"],
+                b["stage"],
+                f"{b['days_waiting']} días",
+                f"${b['amount']:,.0f}".replace(",", ".") if b['amount'] else "$ 0",
+                b["details"]
+            ]
+            for c_idx, v in enumerate(b_vals, start=1):
+                cell = ws1.cell(row=curr_row, column=c_idx, value=v)
+                cell.font = Font(name="Calibri", size=9, bold=(c_idx in [1, 5]))
+                cell.alignment = Alignment(horizontal="center" if c_idx in [1, 3, 4, 5] else "left", vertical="center")
+                cell.border = border_thin
+                if b["severity"] == "critical":
+                    cell.fill = PatternFill(start_color="FEF2F2", end_color="FEF2F2", fill_type="solid")
+                else:
+                    cell.fill = PatternFill(start_color="FFFBEB", end_color="FFFBEB", fill_type="solid")
+            curr_row += 1
+    else:
+        ws1.merge_cells(start_row=curr_row, start_column=1, end_row=curr_row, end_column=7)
+        c = ws1.cell(row=curr_row, column=1, value="✓ ¡Excelente! No hay cuellos de botella ni alertas críticas en este mes.")
+        c.font = Font(name="Calibri", size=10, bold=True, color="059669")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+        curr_row += 1
+
+    for col in ws1.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws1.column_dimensions[col_letter].width = max(max_len + 3, 14)
+
+    # --- SHEET 2: CONCILIACIÓN DETALLADA ---
+    ws2 = wb.create_sheet(title="Conciliación Detallada")
+    ws2.merge_cells("A1:Q1")
+    ws2["A1"] = f"DETALLE DE FACTURACIÓN, PREFACTURAS Y ÓRDENES - {month.upper()}"
+    ws2["A1"].font = Font(name="Calibri", size=13, bold=True, color="FFFFFF")
+    ws2["A1"].fill = PatternFill(start_color=NAVY, end_color=NAVY, fill_type="solid")
+    ws2["A1"].alignment = Alignment(horizontal="center", vertical="center")
+    ws2.row_dimensions[1].height = 30
+
+    det_headers = [
+        "ID", "CLIENTE", "RESPONSABLE", "FRECUENCIA", "PERÍODO",
+        "P1: INFORME", "P1: FECHA", "Nº PREFACTURA", "VALOR PREFACTURA",
+        "P2: OC/HES", "Nº OC", "P3: FACTURA", "FECHA FACTURA", "Nº FACTURA", "VALOR FACTURA",
+        "P4: RADICADO", "ESTADO CIERRE"
+    ]
+    for c_idx, h_text in enumerate(det_headers, start=1):
+        c = ws2.cell(row=3, column=c_idx, value=h_text)
+        c.font = Font(name="Calibri", size=9, bold=True, color="FFFFFF")
+        c.fill = PatternFill(start_color="1E293B", end_color="1E293B", fill_type="solid")
+        c.alignment = Alignment(horizontal="center", vertical="center")
+
+    conn = sqlite3.connect(DB_PATH)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+    if month and month != "ALL":
+        cursor.execute("SELECT * FROM billing_records WHERE month = ? ORDER BY client_id ASC", (month,))
+    else:
+        cursor.execute("SELECT * FROM billing_records ORDER BY client_id ASC")
+    rec_list = cursor.fetchall()
+    cursor.execute("SELECT * FROM clients")
+    cli_map = {c["id"]: dict(c) for c in cursor.fetchall()}
+    conn.close()
+
+    for r_idx, r in enumerate(rec_list, start=4):
+        c_meta = cli_map.get(r["client_id"], {})
+        status_label = "🟢 COMPLETADO" if r["step4"] else ("🔵 FACTURADO" if r["step3"] else ("🟡 ESP. OC" if r["step1"] else "⚪ PENDIENTE"))
+        r_vals = [
+            r["client_id"],
+            r["client_name"],
+            c_meta.get("resp", ""),
+            r["freq_type"],
+            r["period_detail"],
+            "SÍ" if r["step1"] else "NO",
+            r["step1_date"],
+            r["pref_num"],
+            r["pref_val"],
+            "SÍ" if r["step2"] else "NO",
+            r["step2_oc"],
+            "SÍ" if r["step3"] else "NO",
+            r["step3_date"],
+            r["step3_fac"],
+            r["fac_val"],
+            "SÍ" if r["step4"] else "NO",
+            status_label
+        ]
+        for c_idx, v in enumerate(r_vals, start=1):
+            cell = ws2.cell(row=r_idx, column=c_idx, value=v)
+            cell.font = Font(name="Calibri", size=9)
+            cell.alignment = Alignment(horizontal="center" if c_idx not in [2] else "left", vertical="center")
+            cell.border = border_thin
+            if r["step4"]:
+                cell.fill = PatternFill(start_color="F0FDF4", end_color="F0FDF4", fill_type="solid")
+
+    for col in ws2.columns:
+        max_len = max(len(str(cell.value or '')) for cell in col)
+        col_letter = get_column_letter(col[0].column)
+        ws2.column_dimensions[col_letter].width = max(max_len + 3, 12)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+
+    filename = f"Informe_Cierre_Oficial_{month}_{datetime.datetime.now().strftime('%Y%m%d_%H%M')}.xlsx"
     return StreamingResponse(
         output,
         media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",

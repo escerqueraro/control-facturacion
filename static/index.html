@@ -276,6 +276,11 @@
         <div id="onlineUsersPills" class="flex flex-wrap items-center gap-2">
           <!-- Injected dynamically: En línea / Desconectado -->
         </div>
+        <!-- Indicador de Persistencia en la Nube -->
+        <div id="cloudStatusBadge" class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-bold transition">
+          <i class="fa-solid fa-cloud text-blue-500"></i>
+          <span id="cloudStatusText">Nube: Verificando...</span>
+        </div>
       </div>
 
       <!-- Guest Warning Banner (if Guest) -->
@@ -308,6 +313,10 @@
         <button onclick="switchTab('calendar')" id="tabNavCalendar" class="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-2 transition shrink-0">
           <i class="fa-regular fa-calendar-days text-amber-600"></i>
           <span>Calendario Día a Día</span>
+        </button>
+        <button onclick="switchTab('closing')" id="tabNavClosing" class="px-4 py-2 text-xs font-bold rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 flex items-center gap-2 transition shrink-0">
+          <i class="fa-solid fa-chart-pie text-indigo-600"></i>
+          <span>Tablero de Cierre</span>
         </button>
       </div>
     </header>
@@ -391,6 +400,14 @@
               <option value="READY_TO_INVOICE">🟠 Listo para Facturar</option>
               <option value="INVOICED">🔵 Facturado (Pend. Envío)</option>
               <option value="PENDING">⚪ Pendiente Informe</option>
+            </select>
+
+            <!-- Filter Traffic Light / Semáforo de Vencimiento -->
+            <select id="filterTrafficLight" onchange="applyFilters()" class="bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-xs font-semibold text-slate-700 focus:outline-none">
+              <option value="ALL">🚦 Semáforo: Todos</option>
+              <option value="CRITICAL">🔴 Críticos / Vencidos</option>
+              <option value="WARNING">🟡 En Seguimiento</option>
+              <option value="NORMAL">🟢 Al Día / Normal</option>
             </select>
           </div>
 
@@ -628,6 +645,206 @@
             </span>
           </div>
           <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4" id="calendarContainer"></div>
+        </div>
+      </div>
+
+      <!-- TAB 6: TABLERO DE CIERRE MENSUAL OPERATIVO -->
+      <div id="tabClosing" class="hidden flex-1 flex flex-col gap-5 pb-12">
+        <!-- Header with Month Selector & Export Button -->
+        <div class="bg-white rounded-2xl border border-[var(--card-border)] p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
+          <div class="flex items-center gap-3">
+            <div class="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-700 flex items-center justify-center text-lg font-bold shadow-xs">
+              <i class="fa-solid fa-chart-pie"></i>
+            </div>
+            <div>
+              <h2 class="text-base font-black text-slate-800">Tablero Ejecutivo de Cierre Mensual</h2>
+              <p class="text-xs text-slate-500 font-medium">Auditoría operativa, conciliación prefacturado vs facturado y control de cuellos de botella</p>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2.5">
+            <div class="flex items-center gap-1.5 bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-1.5 text-xs font-semibold text-slate-700">
+              <span>Mes de Cierre:</span>
+              <select id="closingMonthSelect" onchange="loadMonthlyClosingData()" class="bg-transparent font-bold text-indigo-900 focus:outline-none">
+                <option value="Octubre" selected>Octubre</option>
+                <option value="Septiembre">Septiembre</option>
+                <option value="Noviembre">Noviembre</option>
+                <option value="Diciembre">Diciembre</option>
+                <option value="ALL">Consolidado General</option>
+              </select>
+            </div>
+
+            <button onclick="downloadExecutiveClosingExcel()" class="px-3.5 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1.5 transition cursor-pointer">
+              <i class="fa-solid fa-file-excel"></i>
+              <span>Descargar Informe de Cierre Oficial</span>
+            </button>
+          </div>
+        </div>
+
+        <!-- 5 Key Closing KPIs Cards -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          <div class="bg-white rounded-2xl border border-[var(--card-border)] p-4 shadow-xs flex items-center justify-between">
+            <div>
+              <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Total Empresas / Filas</span>
+              <div id="closeKpiRecords" class="text-2xl font-black text-slate-800 mt-1">0</div>
+              <div class="text-[11px] text-slate-500 font-medium mt-0.5" id="closeKpiClientsText">41 Clientes asignados</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-building"></i>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-sky-100 p-4 shadow-xs flex items-center justify-between bg-sky-50/20">
+            <div>
+              <span class="text-[10px] font-bold text-sky-600 uppercase tracking-wider">Total Prefacturado</span>
+              <div id="closeKpiPref" class="text-2xl font-black text-sky-800 mt-1">$ 0</div>
+              <div class="text-[11px] text-sky-600 font-medium mt-0.5" id="closeKpiPrefCount">0 registros con valor</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-file-invoice"></i>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-emerald-100 p-4 shadow-xs flex items-center justify-between bg-emerald-50/20">
+            <div>
+              <span class="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Total Facturado Real</span>
+              <div id="closeKpiFac" class="text-2xl font-black text-emerald-800 mt-1">$ 0</div>
+              <div class="text-[11px] text-emerald-600 font-medium mt-0.5" id="closeKpiFacCount">0 facturas emitidas</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-file-invoice-dollar"></i>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-rose-100 p-4 shadow-xs flex items-center justify-between bg-rose-50/20">
+            <div>
+              <span class="text-[10px] font-bold text-rose-600 uppercase tracking-wider">Brecha / Pendiente</span>
+              <div id="closeKpiDiff" class="text-2xl font-black text-rose-800 mt-1">$ 0</div>
+              <div class="text-[11px] text-rose-600 font-medium mt-0.5" id="closeKpiDiffText">Diferencia neta</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-scale-unbalanced"></i>
+            </div>
+          </div>
+
+          <div class="bg-white rounded-2xl border border-purple-100 p-4 shadow-xs flex items-center justify-between bg-purple-50/20">
+            <div>
+              <span class="text-[10px] font-bold text-purple-600 uppercase tracking-wider">% Avance de Cierre</span>
+              <div id="closeKpiRate" class="text-2xl font-black text-purple-800 mt-1">0%</div>
+              <div class="text-[11px] text-purple-600 font-medium mt-0.5" id="closeKpiRateText">Radicados al cliente</div>
+            </div>
+            <div class="w-10 h-10 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-circle-check"></i>
+            </div>
+          </div>
+        </div>
+
+        <!-- Funnel Progress Bars -->
+        <div class="bg-white rounded-2xl border border-[var(--card-border)] p-5 shadow-xs space-y-4">
+          <div class="flex items-center justify-between">
+            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-bars-progress text-indigo-600"></i>
+              <span>Embudo Operativo del Proceso de Facturación</span>
+            </h3>
+            <span class="text-xs font-semibold text-slate-500" id="closeFunnelOverall">4 Fases Operativas</span>
+          </div>
+
+          <div class="grid grid-cols-1 md:grid-cols-4 gap-4 pt-1">
+            <!-- Phase 1: Informes -->
+            <div class="p-3.5 rounded-xl bg-sky-50/60 border border-sky-100 space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold text-sky-900">
+                <span>1. Informes Enviados</span>
+                <span id="closeStep1Pct">0%</span>
+              </div>
+              <div class="w-full bg-sky-200/60 rounded-full h-2 overflow-hidden">
+                <div id="closeStep1Bar" class="bg-sky-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <div class="text-[11px] text-sky-700 font-semibold" id="closeStep1Count">0 de 0 registros</div>
+            </div>
+
+            <!-- Phase 2: OCs -->
+            <div class="p-3.5 rounded-xl bg-amber-50/60 border border-amber-100 space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold text-amber-900">
+                <span>2. OCs Recibidas / Vbo</span>
+                <span id="closeStep2Pct">0%</span>
+              </div>
+              <div class="w-full bg-amber-200/60 rounded-full h-2 overflow-hidden">
+                <div id="closeStep2Bar" class="bg-amber-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <div class="text-[11px] text-amber-700 font-semibold" id="closeStep2Count">0 de 0 registros</div>
+            </div>
+
+            <!-- Phase 3: Facturas -->
+            <div class="p-3.5 rounded-xl bg-emerald-50/60 border border-emerald-100 space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold text-emerald-900">
+                <span>3. Facturas Emitidas</span>
+                <span id="closeStep3Pct">0%</span>
+              </div>
+              <div class="w-full bg-emerald-200/60 rounded-full h-2 overflow-hidden">
+                <div id="closeStep3Bar" class="bg-emerald-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <div class="text-[11px] text-emerald-700 font-semibold" id="closeStep3Count">0 de 0 registros</div>
+            </div>
+
+            <!-- Phase 4: Radicadas -->
+            <div class="p-3.5 rounded-xl bg-purple-50/60 border border-purple-100 space-y-2">
+              <div class="flex items-center justify-between text-xs font-bold text-purple-900">
+                <span>4. Facturas Radicadas</span>
+                <span id="closeStep4Pct">0%</span>
+              </div>
+              <div class="w-full bg-purple-200/60 rounded-full h-2 overflow-hidden">
+                <div id="closeStep4Bar" class="bg-purple-600 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+              </div>
+              <div class="text-[11px] text-purple-700 font-semibold" id="closeStep4Count">0 de 0 registros</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 2 Columns: Cuellos de Botella (Semáforo) & Conciliación por Responsable -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+          <!-- Col 1: Cuellos de Botella y Semáforo de Vencimiento (2 Cols width) -->
+          <div class="lg:col-span-2 bg-white rounded-2xl border border-[var(--card-border)] p-5 shadow-xs flex flex-col gap-3">
+            <div class="flex items-center justify-between">
+              <h3 class="text-xs font-bold text-rose-800 uppercase tracking-wider flex items-center gap-2">
+                <i class="fa-solid fa-triangle-exclamation text-rose-600"></i>
+                <span>Semáforo de Cuellos de Botella y Retrasos de Cierre</span>
+              </h3>
+              <span id="closeBottlenecksBadge" class="px-2 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-200">
+                0 Alertas
+              </span>
+            </div>
+
+            <div class="overflow-x-auto flex-1">
+              <table class="w-full text-left text-xs border-collapse">
+                <thead class="bg-slate-50 text-slate-600 font-bold uppercase text-[10px] border-b border-slate-200">
+                  <tr>
+                    <th class="p-2.5">Nivel</th>
+                    <th class="p-2.5">Empresa / Cliente</th>
+                    <th class="p-2.5">Resp.</th>
+                    <th class="p-2.5">Etapa Atascada</th>
+                    <th class="p-2.5 text-center">Días</th>
+                    <th class="p-2.5">Valor ($)</th>
+                    <th class="p-2.5 text-center">Acción</th>
+                  </tr>
+                </thead>
+                <tbody id="closeBottlenecksBody" class="divide-y divide-slate-100">
+                  <!-- Injected dynamically -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Col 2: Conciliación por Responsable (Sol vs Edwar) -->
+          <div class="bg-white rounded-2xl border border-[var(--card-border)] p-5 shadow-xs flex flex-col gap-4">
+            <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider flex items-center gap-2">
+              <i class="fa-solid fa-user-check text-blue-600"></i>
+              <span>Conciliación por Responsable</span>
+            </h3>
+
+            <div id="closeRespCardsContainer" class="space-y-3">
+              <!-- Injected dynamically for Sol and Edwar -->
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1103,17 +1320,31 @@
             </div>
           </div>
           <!-- Archivo de Informe -->
-          <div class="pt-1 flex items-center justify-between gap-2 flex-wrap" id="editRecReportDocContainer">
-            <div id="editRecReportDocInfo" class="text-[11px] text-slate-600"></div>
-            <div class="flex items-center gap-1.5">
-              <label class="px-2.5 py-1 rounded-xl bg-white hover:bg-sky-100 text-sky-800 font-bold border border-sky-300 cursor-pointer inline-flex items-center gap-1.5 text-xs shadow-2xs">
-                <i class="fa-solid fa-file-arrow-up text-sky-600"></i>
-                <span id="editRecReportBtnText">Subir/Cambiar Informe</span>
-                <input type="file" id="editRecReportInput" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="onEditModalFileSelected(event, 'report_doc')">
-              </label>
-              <button type="button" id="editRecReportRemoveBtn" onclick="removeEditModalFile('report_doc')" class="hidden px-2 py-1 text-xs text-rose-600 hover:text-rose-800 font-bold hover:bg-rose-50 rounded-lg transition" title="Quitar archivo de informe">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
+          <div class="pt-1" id="editRecReportDocContainer">
+            <div ondragover="handleModalDragOver(event, 'report_doc')" ondragleave="handleModalDragLeave(event, 'report_doc')" ondrop="handleModalDrop(event, 'report_doc')"
+                 class="p-2.5 rounded-xl border border-dashed border-sky-300 bg-sky-50/60 hover:bg-sky-100/70 transition flex items-center justify-between gap-2 flex-wrap cursor-pointer">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-sky-100 text-sky-700 flex items-center justify-center text-sm shadow-2xs">
+                  <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                </div>
+                <div>
+                  <div class="text-[11px] font-bold text-sky-950 flex items-center gap-1.5">
+                    <span>Zona de Carga: Informe (.xlsx, .csv)</span>
+                    <span class="text-[9px] bg-sky-200/80 text-sky-900 px-1.5 py-0.2 rounded font-semibold">Arrastrar o Clic</span>
+                  </div>
+                  <div id="editRecReportDocInfo" class="text-[10px] text-slate-500 font-medium mt-0.5">Sin archivo de informe seleccionado</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <label class="px-3 py-1.5 rounded-xl bg-white hover:bg-sky-100 text-sky-800 font-bold border border-sky-300 cursor-pointer inline-flex items-center gap-1.5 text-xs shadow-2xs transition">
+                  <i class="fa-solid fa-file-arrow-up text-sky-600"></i>
+                  <span id="editRecReportBtnText">Subir Informe</span>
+                  <input type="file" id="editRecReportInput" accept=".xlsx,.xls,.csv,.docx,.doc" class="hidden" onchange="onEditModalFileSelected(event, 'report_doc')">
+                </label>
+                <button type="button" id="editRecReportRemoveBtn" onclick="removeEditModalFile('report_doc')" class="hidden px-2.5 py-1.5 text-xs text-rose-600 hover:text-rose-800 font-bold hover:bg-rose-50 rounded-lg transition" title="Quitar archivo de informe">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1163,17 +1394,31 @@
             </div>
           </div>
           <!-- Archivo Factura PDF -->
-          <div class="pt-1 flex items-center justify-between gap-2 flex-wrap" id="editRecFacPdfContainer">
-            <div id="editRecFacPdfInfo" class="text-[11px] text-slate-600"></div>
-            <div class="flex items-center gap-1.5">
-              <label class="px-2.5 py-1 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 cursor-pointer inline-flex items-center gap-1.5 text-xs shadow-2xs">
-                <i class="fa-solid fa-file-pdf text-red-600"></i>
-                <span id="editRecFacBtnText">Subir/Cambiar PDF Factura</span>
-                <input type="file" id="editRecFacPdfInput" accept=".pdf,image/*" class="hidden" onchange="onEditModalFileSelected(event, 'fac_pdf')">
-              </label>
-              <button type="button" id="editRecFacPdfRemoveBtn" onclick="removeEditModalFile('fac_pdf')" class="hidden px-2 py-1 text-xs text-rose-600 hover:text-rose-800 font-bold hover:bg-rose-50 rounded-lg transition" title="Quitar PDF">
-                <i class="fa-solid fa-trash-can"></i>
-              </button>
+          <div class="pt-1" id="editRecFacPdfContainer">
+            <div ondragover="handleModalDragOver(event, 'fac_pdf')" ondragleave="handleModalDragLeave(event, 'fac_pdf')" ondrop="handleModalDrop(event, 'fac_pdf')"
+                 class="p-2.5 rounded-xl border border-dashed border-emerald-300 bg-emerald-50/60 hover:bg-emerald-100/70 transition flex items-center justify-between gap-2 flex-wrap cursor-pointer">
+              <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm shadow-2xs">
+                  <i class="fa-solid fa-file-pdf text-red-600"></i>
+                </div>
+                <div>
+                  <div class="text-[11px] font-bold text-emerald-950 flex items-center gap-1.5">
+                    <span>Zona de Carga: Factura (.pdf)</span>
+                    <span class="text-[9px] bg-emerald-200/80 text-emerald-900 px-1.5 py-0.2 rounded font-semibold">Arrastrar o Clic</span>
+                  </div>
+                  <div id="editRecFacPdfInfo" class="text-[10px] text-slate-500 font-medium mt-0.5">Sin archivo de factura PDF seleccionado</div>
+                </div>
+              </div>
+              <div class="flex items-center gap-1.5">
+                <label class="px-3 py-1.5 rounded-xl bg-white hover:bg-emerald-100 text-emerald-800 font-bold border border-emerald-300 cursor-pointer inline-flex items-center gap-1.5 text-xs shadow-2xs transition">
+                  <i class="fa-solid fa-file-arrow-up text-emerald-600"></i>
+                  <span id="editRecFacBtnText">Subir Factura PDF</span>
+                  <input type="file" id="editRecFacPdfInput" accept=".pdf,image/*" class="hidden" onchange="onEditModalFileSelected(event, 'fac_pdf')">
+                </label>
+                <button type="button" id="editRecFacPdfRemoveBtn" onclick="removeEditModalFile('fac_pdf')" class="hidden px-2.5 py-1.5 text-xs text-rose-600 hover:text-rose-800 font-bold hover:bg-rose-50 rounded-lg transition" title="Quitar PDF">
+                  <i class="fa-solid fa-trash-can"></i>
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -1477,6 +1722,7 @@
         }
       }
       localStorage.removeItem("facturacion_user");
+      updateCloudStatusBadge();
     });
 
     function togglePasswordVisibility(inputId, iconId) {
@@ -2166,6 +2412,151 @@
       return { text: "Pendiente Informe", cls: "bg-slate-100 text-slate-700 border-slate-300", key: "PENDING" };
     }
 
+    // ==========================================
+    // SEMÁFORO DE VENCIMIENTO & PENDIENTES
+    // ==========================================
+    function computeRecordTrafficLight(rec) {
+      if (rec.step4) {
+        return {
+          color: "green",
+          level: "normal",
+          badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+          icon: "fa-circle-check",
+          label: "Completado",
+          days: 0,
+          description: "Ciclo cerrado y radicado satisfactoriamente"
+        };
+      }
+
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+
+      function parseDateDiff(dateStr) {
+        if (!dateStr) return null;
+        const clean = String(dateStr).split("T")[0].split(" ")[0].trim();
+        const parts = clean.split("-");
+        if (parts.length === 3) {
+          const d = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+          if (!isNaN(d.getTime())) {
+            const diff = Math.floor((today - d) / (1000 * 60 * 60 * 24));
+            return diff >= 0 ? diff : 0;
+          }
+        }
+        return null;
+      }
+
+      // 1. Facturado pero no radicado (Paso 3 sí, Paso 4 no)
+      if (rec.step3) {
+        const days = parseDateDiff(rec.step3_date) ?? 1;
+        if (days <= 2) {
+          return {
+            color: "green",
+            level: "normal",
+            badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+            icon: "fa-clock",
+            label: `Facturado (${days}d)`,
+            days,
+            description: "En tiempo reglamentario para radicación/entrega al cliente"
+          };
+        } else if (days <= 5) {
+          return {
+            color: "yellow",
+            level: "warning",
+            badgeClass: "bg-amber-50 text-amber-700 border-amber-300",
+            icon: "fa-triangle-exclamation",
+            label: `Pend. Radicar (${days}d)`,
+            days,
+            description: `Seguimiento: ${days} días desde emisión sin confirmación de radicado`
+          };
+        } else {
+          return {
+            color: "red",
+            level: "critical",
+            badgeClass: "bg-rose-50 text-rose-700 border-rose-300",
+            icon: "fa-circle-exclamation",
+            label: `Radicación Atrasada (${days}d)`,
+            days,
+            description: `Alerta Crítica: ${days} días emitida la factura sin radicación al cliente`
+          };
+        }
+      }
+
+      // 2. Informe enviado, esperando Orden de Compra (Paso 1 sí, Paso 2 no, reqOc sí)
+      if (rec.step1 && rec.reqOc && !rec.step2) {
+        const days = parseDateDiff(rec.step1_date) ?? 1;
+        if (days <= 3) {
+          return {
+            color: "green",
+            level: "normal",
+            badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200",
+            icon: "fa-clock",
+            label: `Esp. OC (${days}d)`,
+            days,
+            description: "Dentro del tiempo de respuesta estándar del cliente"
+          };
+        } else if (days <= 7) {
+          return {
+            color: "yellow",
+            level: "warning",
+            badgeClass: "bg-amber-50 text-amber-700 border-amber-300",
+            icon: "fa-triangle-exclamation",
+            label: `Seguimiento OC (${days}d)`,
+            days,
+            description: `Seguimiento: ${days} días esperando orden de compra. Insistir al cliente.`
+          };
+        } else {
+          return {
+            color: "red",
+            level: "critical",
+            badgeClass: "bg-rose-50 text-rose-700 border-rose-300",
+            icon: "fa-circle-exclamation",
+            label: `OC Vencida (${days}d)`,
+            days,
+            description: `Alerta Crítica: ${days} días sin orden de compra. Riesgo de bloqueo de facturación.`
+          };
+        }
+      }
+
+      // 3. Aprobado / OC Recibida pero Factura no generada
+      if ((rec.step2 || !rec.reqOc) && (rec.step1 || !rec.reqInf) && !rec.step3) {
+        const days = parseDateDiff(rec.step2_date || rec.step1_date) ?? 1;
+        if (days <= 2) {
+          return {
+            color: "blue",
+            level: "normal",
+            badgeClass: "bg-sky-50 text-sky-700 border-sky-300",
+            icon: "fa-file-invoice",
+            label: `Listo Facturar (${days}d)`,
+            days,
+            description: "Aprobado: listo para generar la factura en el sistema"
+          };
+        } else {
+          return {
+            color: "red",
+            level: "critical",
+            badgeClass: "bg-rose-50 text-rose-700 border-rose-300",
+            icon: "fa-clock-rotate-left",
+            label: `Factura Demorada (${days}d)`,
+            days,
+            description: `Alerta Crítica: Aprobación lista hace ${days} días sin emitir la factura`
+          };
+        }
+      }
+
+      // 4. Pendiente de informe / inicio de ciclo
+      const curDay = today.getDate();
+      const isDelayed = curDay > 5;
+      return {
+        color: isDelayed ? "yellow" : "gray",
+        level: isDelayed ? "warning" : "normal",
+        badgeClass: isDelayed ? "bg-amber-50 text-amber-700 border-amber-300" : "bg-slate-50 text-slate-600 border-slate-200",
+        icon: isDelayed ? "fa-hourglass-half" : "fa-calendar",
+        label: isDelayed ? "Inf. Pendiente" : "Programado",
+        days: 0,
+        description: isDelayed ? "Fecha de corte superada: pendiente generar y enviar informe" : "En espera de fecha de corte para este período"
+      };
+    }
+
     function getDetailOptionsForFreq(freq) {
       if (freq === "Quincenal") {
         return ["1Q (1-15)", "2Q (16-Fin)"];
@@ -2563,10 +2954,34 @@
       }
     }
 
-    // File Upload and Removal
-    async function uploadRecordFile(event, recordId, docType) {
-      const file = event.target.files && event.target.files[0];
+    // ==========================================
+    // DUAL DRAG & DROP Y SUBIDA DE DOCUMENTOS
+    // ==========================================
+    async function uploadDirectFile(file, recordId, docType) {
       if (!file) return;
+
+      const ext = "." + file.name.split('.').pop().toLowerCase();
+      if (docType === "report_doc") {
+        const validReportExts = [".xlsx", ".xls", ".csv", ".docx", ".doc"];
+        if (!validReportExts.includes(ext)) {
+          if (ext === ".pdf") {
+            alert("⚠️ ATENCIÓN: Este espacio es exclusivamente para Informes (.xlsx / .xls / .csv).\n\nPara cargar la Factura PDF, por favor arrástrala o cárgala en la columna verde de Factura (Paso 3).");
+          } else {
+            alert(`Extensión no permitida para informe: ${ext}. Debe ser archivo Excel o informe (.xlsx, .xls, .csv).`);
+          }
+          return;
+        }
+      } else if (docType === "fac_pdf") {
+        const validFacExts = [".pdf", ".png", ".jpg", ".jpeg"];
+        if (!validFacExts.includes(ext)) {
+          if (ext.startsWith(".xls") || ext === ".csv") {
+            alert("⚠️ ATENCIÓN: Este espacio es exclusivamente para Facturas (.pdf).\n\nPara cargar el Informe Excel, por favor arrástralo o cárgalo en la columna azul de Informe (Paso 1).");
+          } else {
+            alert(`Extensión no permitida para factura: ${ext}. Debe ser documento PDF o imagen (.pdf, .png, .jpg).`);
+          }
+          return;
+        }
+      }
 
       const formData = new FormData();
       formData.append("file", file);
@@ -2598,7 +3013,7 @@
           renderFacturasTable();
           renderIndependentMatrixTable();
           setSaveStatus("saved");
-          showToast(`✓ Archivo <strong>${file.name}</strong> subido correctamente`);
+          showToast(`✓ Archivo <strong>${file.name}</strong> subido y vinculado`);
         } else {
           alert(data.detail || "Error al subir archivo");
           setSaveStatus("error");
@@ -2606,8 +3021,115 @@
       } catch (e) {
         alert("Error de conexión al subir archivo");
         setSaveStatus("error");
-      } finally {
-        event.target.value = "";
+      }
+    }
+
+    function uploadRecordFile(event, recordId, docType) {
+      const file = event.target.files && event.target.files[0];
+      if (file) {
+        uploadDirectFile(file, recordId, docType);
+      }
+      event.target.value = "";
+    }
+
+    function handleDragOverZone(event, zoneType) {
+      event.preventDefault();
+      event.stopPropagation();
+      const el = event.currentTarget;
+      if (zoneType === 'report_doc') {
+        el.classList.add("ring-2", "ring-sky-500", "bg-sky-100");
+      } else {
+        el.classList.add("ring-2", "ring-emerald-500", "bg-emerald-100");
+      }
+    }
+
+    function handleDragLeaveZone(event, zoneType) {
+      event.preventDefault();
+      event.stopPropagation();
+      const el = event.currentTarget;
+      if (zoneType === 'report_doc') {
+        el.classList.remove("ring-2", "ring-sky-500", "bg-sky-100");
+      } else {
+        el.classList.remove("ring-2", "ring-emerald-500", "bg-emerald-100");
+      }
+    }
+
+    function handleDropZone(event, recordId, docType) {
+      event.preventDefault();
+      event.stopPropagation();
+      const el = event.currentTarget;
+      if (docType === 'report_doc') {
+        el.classList.remove("ring-2", "ring-sky-500", "bg-sky-100");
+      } else {
+        el.classList.remove("ring-2", "ring-emerald-500", "bg-emerald-100");
+      }
+
+      const dt = event.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        uploadDirectFile(dt.files[0], recordId, docType);
+      }
+    }
+
+    function handleModalDragOver(event, zoneType) {
+      event.preventDefault();
+      event.stopPropagation();
+      const el = event.currentTarget;
+      if (zoneType === 'report_doc') {
+        el.classList.add("ring-2", "ring-sky-500", "bg-sky-100");
+      } else {
+        el.classList.add("ring-2", "ring-emerald-500", "bg-emerald-100");
+      }
+    }
+
+    function handleModalDragLeave(event, zoneType) {
+      event.preventDefault();
+      event.stopPropagation();
+      const el = event.currentTarget;
+      if (zoneType === 'report_doc') {
+        el.classList.remove("ring-2", "ring-sky-500", "bg-sky-100");
+      } else {
+        el.classList.remove("ring-2", "ring-emerald-500", "bg-emerald-100");
+      }
+    }
+
+    async function handleModalDrop(event, docType) {
+      event.preventDefault();
+      event.stopPropagation();
+      const el = event.currentTarget;
+      if (docType === 'report_doc') {
+        el.classList.remove("ring-2", "ring-sky-500", "bg-sky-100");
+      } else {
+        el.classList.remove("ring-2", "ring-emerald-500", "bg-emerald-100");
+      }
+
+      const dt = event.dataTransfer;
+      if (dt && dt.files && dt.files.length > 0) {
+        const file = dt.files[0];
+        const ext = "." + file.name.split('.').pop().toLowerCase();
+        if (docType === "report_doc") {
+          const validReportExts = [".xlsx", ".xls", ".csv", ".docx", ".doc"];
+          if (!validReportExts.includes(ext)) {
+            if (ext === ".pdf") {
+              alert("⚠️ ATENCIÓN: Este espacio es exclusivamente para Informes (.xlsx / .csv).\n\nPara cargar la Factura PDF, por favor arrástrala al espacio verde del Paso 3.");
+            } else {
+              alert(`Extensión no permitida para informe: ${ext}. Debe ser archivo Excel o informe (.xlsx, .csv).`);
+            }
+            return;
+          }
+        } else if (docType === "fac_pdf") {
+          const validFacExts = [".pdf", ".png", ".jpg", ".jpeg"];
+          if (!validFacExts.includes(ext)) {
+            if (ext.startsWith(".xls") || ext === ".csv") {
+              alert("⚠️ ATENCIÓN: Este espacio es exclusivamente para Facturas (.pdf).\n\nPara cargar el Informe Excel, por favor arrástralo al espacio azul del Paso 1.");
+            } else {
+              alert(`Extensión no permitida para factura: ${ext}. Debe ser documento PDF o imagen (.pdf).`);
+            }
+            return;
+          }
+        }
+
+        const fakeEvent = { target: { files: [file], value: "" } };
+        await onEditModalFileSelected(fakeEvent, docType);
       }
     }
 
@@ -2773,6 +3295,7 @@
       const detailOptionsHtml = detailOpts.map(opt => `<option value="${opt}" ${r.period_detail === opt ? 'selected' : ''}>${opt}</option>`).join("");
       const monthOptionsHtml = MONTHS_LIST.map(m => `<option value="${m}" ${r.month === m ? 'selected' : ''}>${m}</option>`).join("");
       const st = computeRecordStatus(r);
+      const tl = computeRecordTrafficLight(r);
       const reqInf = (c.req_inf !== undefined) ? !!c.req_inf : !!c.reqInf;
       const reqOc = (c.req_oc !== undefined) ? !!c.req_oc : !!c.reqOc;
 
@@ -2886,11 +3409,16 @@
                           ` : ''}
                         </div>
                       ` : (!isViewer ? `
-                        <label class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer transition">
-                          <i class="fa-solid fa-paperclip text-slate-500"></i>
-                          <span>Adjuntar Informe</span>
-                          <input type="file" accept=".xlsx,.xls,.pdf,.docx,.doc,.csv" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'report_doc')">
-                        </label>
+                        <div ondragover="handleDragOverZone(event, 'report_doc')" ondragleave="handleDragLeaveZone(event, 'report_doc')" ondrop="handleDropZone(event, '${r.record_id}', 'report_doc')"
+                             class="border border-dashed border-sky-300 bg-sky-50/70 hover:bg-sky-100/80 rounded-lg p-1 text-center transition cursor-pointer">
+                          <label class="cursor-pointer block">
+                            <div class="flex items-center justify-center gap-1 text-[9px] font-bold text-sky-900">
+                              <i class="fa-solid fa-file-excel text-emerald-600"></i>
+                              <span>Arrastra XLSX / Adjuntar</span>
+                            </div>
+                            <input type="file" accept=".xlsx,.xls,.csv,.docx,.doc" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'report_doc')">
+                          </label>
+                        </div>
                       ` : '')}
                     </div>
                     <div id="pref-badge-${r.record_id}"></div>
@@ -2950,11 +3478,16 @@
                           ` : ''}
                         </div>
                       ` : (!isViewer ? `
-                        <label class="inline-flex items-center gap-1 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-700 hover:bg-slate-200 border border-slate-300 cursor-pointer transition">
-                          <i class="fa-solid fa-paperclip text-slate-500"></i>
-                          <span>Adjuntar Factura PDF</span>
-                          <input type="file" accept=".pdf,image/*" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'fac_pdf')">
-                        </label>
+                        <div ondragover="handleDragOverZone(event, 'fac_pdf')" ondragleave="handleDragLeaveZone(event, 'fac_pdf')" ondrop="handleDropZone(event, '${r.record_id}', 'fac_pdf')"
+                             class="border border-dashed border-emerald-300 bg-emerald-50/70 hover:bg-emerald-100/80 rounded-lg p-1 text-center transition cursor-pointer">
+                          <label class="cursor-pointer block">
+                            <div class="flex items-center justify-center gap-1 text-[9px] font-bold text-emerald-900">
+                              <i class="fa-solid fa-file-pdf text-red-600"></i>
+                              <span>Arrastra PDF / Adjuntar</span>
+                            </div>
+                            <input type="file" accept=".pdf,image/*" class="hidden" onchange="uploadRecordFile(event, '${r.record_id}', 'fac_pdf')">
+                          </label>
+                        </div>
                       ` : '')}
                     </div>
                     <div id="fac-badge-${r.record_id}"></div>
@@ -2976,9 +3509,15 @@
                 </td>
 
                 <td class="p-2 text-center align-top">
-                  <span id="status-badge-${r.record_id}" class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.cls} shadow-2xs">
-                    ${st.text}
-                  </span>
+                  <div class="flex flex-col items-center gap-1">
+                    <span id="status-badge-${r.record_id}" class="inline-block px-2.5 py-1 rounded-full text-[11px] font-bold border ${st.cls} shadow-2xs">
+                      ${st.text}
+                    </span>
+                    <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${tl.badgeClass} shadow-2xs cursor-help" title="${tl.description}">
+                      <i class="fa-solid ${tl.icon} text-[9px]"></i>
+                      <span>${tl.label}</span>
+                    </span>
+                  </div>
                 </td>
 
                 <td class="p-2 align-top">
@@ -3028,6 +3567,7 @@
               <tbody class="divide-y divide-slate-100">
                 ${committedRecords.map((cr, cIdx) => {
                   const cSt = computeRecordStatus(cr);
+                  const cTl = computeRecordTrafficLight(cr);
                   return `
                     <tr class="hover:bg-slate-50/80 transition">
                       <td class="p-2 text-center text-slate-400 font-mono text-[11px] font-bold">${cIdx + 1}</td>
@@ -3067,7 +3607,13 @@
                         ` : ''}
                       </td>
                       <td class="p-2 text-center">
-                        <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${cSt.cls}">${cSt.text}</span>
+                        <div class="flex flex-col items-center gap-1">
+                          <span class="inline-block px-2 py-0.5 rounded-full text-[10px] font-bold border ${cSt.cls}">${cSt.text}</span>
+                          <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold border ${cTl.badgeClass}" title="${cTl.description}">
+                            <i class="fa-solid ${cTl.icon} text-[8px]"></i>
+                            <span>${cTl.label}</span>
+                          </span>
+                        </div>
                         ${cr.step4 ? `<div class="text-[9px] font-bold text-purple-700 mt-0.5">✓ Enviada</div>` : ''}
                       </td>
                       <td class="p-2 text-[11px] text-slate-500 truncate max-w-[120px]">${cr.notes || '-'}</td>
@@ -3134,6 +3680,7 @@
       const filterResp = document.getElementById("filterResp") ? document.getElementById("filterResp").value : "ALL";
       const filterFreq = document.getElementById("filterFreq") ? document.getElementById("filterFreq").value : "ALL";
       const filterStatus = document.getElementById("filterStatus") ? document.getElementById("filterStatus").value : "ALL";
+      const filterTraffic = document.getElementById("filterTrafficLight") ? document.getElementById("filterTrafficLight").value : "ALL";
       const search = document.getElementById("searchInput") ? document.getElementById("searchInput").value.toLowerCase().trim() : "";
 
       const clientsList = allClients.length > 0 ? allClients : CLIENTS_MASTER;
@@ -3146,6 +3693,9 @@
           if (c.freq_type !== filterFreq && c.freqType !== filterFreq) return;
         }
         if (filterStatus !== "ALL" && !cRecords.some(r => computeRecordStatus(r).key === filterStatus)) {
+          return;
+        }
+        if (filterTraffic !== "ALL" && !cRecords.some(r => computeRecordTrafficLight(r).level.toUpperCase() === filterTraffic)) {
           return;
         }
         if (search) {
@@ -3568,6 +4118,7 @@
         const reqInf = (c.req_inf !== undefined) ? !!c.req_inf : !!c.reqInf;
         const pVal = parseMoney(r.pref_val);
         const fVal = parseMoney(r.fac_val);
+        const tl = computeRecordTrafficLight(r);
         if (pVal > 0) {
           totalPrefVal += pVal;
           countPref++;
@@ -3589,9 +4140,14 @@
         tr.innerHTML = `
           <td class="p-2.5 text-center text-slate-400 font-mono text-[11px] font-bold">${idx + 1}</td>
           <td class="p-2.5 font-bold text-slate-900">
-            ${c.name}
-            <span class="ml-1 text-[10px] px-1.5 py-0.2 rounded font-semibold ${c.resp === 'Edwar' ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800'}">${c.resp}</span>
-            ${!reqInf ? '<span class="ml-1 text-[9px] font-bold text-sky-700 bg-sky-100/80 px-1.5 py-0.2 rounded border border-sky-200" title="Control interno de verificación para prefacturas">Interno</span>' : ''}
+            <div class="flex items-center flex-wrap gap-1">
+              <span>${c.name}</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded font-semibold ${c.resp === 'Edwar' ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800'}">${c.resp}</span>
+              ${!reqInf ? '<span class="text-[9px] font-bold text-sky-700 bg-sky-100/80 px-1.5 py-0.2 rounded border border-sky-200" title="Control interno de verificación para prefacturas">Interno</span>' : ''}
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-extrabold border ${tl.badgeClass}" title="${tl.description}">
+                <i class="fa-solid ${tl.icon} text-[8px]"></i> ${tl.label}
+              </span>
+            </div>
           </td>
           <td class="p-2.5">
             ${r.area_group ? `<span class="px-2 py-0.5 text-[10px] font-extrabold rounded bg-indigo-100 text-indigo-800 border border-indigo-200">${r.area_group}</span>` : '<span class="text-slate-400">-</span>'}
@@ -3682,6 +4238,7 @@
       facRows.forEach((r, idx) => {
         const c = clientMap[r.client_id] || { name: r.client_name, resp: 'Edwar' };
         const fVal = parseMoney(r.fac_val);
+        const tl = computeRecordTrafficLight(r);
         if (fVal > 0) {
           totalFacVal += fVal;
         }
@@ -3693,8 +4250,13 @@
         tr.innerHTML = `
           <td class="p-2.5 text-center text-slate-400 font-mono text-[11px] font-bold">${idx + 1}</td>
           <td class="p-2.5 font-bold text-slate-900">
-            ${c.name}
-            <span class="ml-1 text-[10px] px-1.5 py-0.2 rounded font-semibold ${c.resp === 'Edwar' ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800'}">${c.resp}</span>
+            <div class="flex items-center flex-wrap gap-1">
+              <span>${c.name}</span>
+              <span class="text-[10px] px-1.5 py-0.2 rounded font-semibold ${c.resp === 'Edwar' ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800'}">${c.resp}</span>
+              <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-extrabold border ${tl.badgeClass}" title="${tl.description}">
+                <i class="fa-solid ${tl.icon} text-[8px]"></i> ${tl.label}
+              </span>
+            </div>
           </td>
           <td class="p-2.5">
             ${r.area_group ? `<span class="px-2 py-0.5 text-[10px] font-extrabold rounded bg-indigo-100 text-indigo-800 border border-indigo-200">${r.area_group}</span>` : '<span class="text-slate-400">-</span>'}
@@ -3726,7 +4288,12 @@
             ` : '<span class="text-slate-400">-</span>'}
           </td>
           <td class="p-2.5 text-center">
-            ${r.step4 ? '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-800 border border-purple-200">✓ Entregada</span>' : '<span class="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-600">Pend. Envío</span>'}
+            <div class="flex flex-col items-center gap-1">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold border ${tl.badgeClass}" title="${tl.description}">
+                <i class="fa-solid ${tl.icon} text-[8px]"></i> ${tl.label}
+              </span>
+              ${r.step4 ? '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-purple-100 text-purple-800 border border-purple-200">✓ Radicada</span>' : '<span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-slate-100 text-slate-600">Pend. Envío</span>'}
+            </div>
           </td>
           <td class="p-2.5 text-slate-600 text-[11px] truncate max-w-[150px]">${r.notes || '-'}</td>
           <td class="p-2.5 text-center">
@@ -4749,7 +5316,7 @@
     // Tab Navigation
     function switchTab(tabId) {
       currentTab = tabId;
-      const tabIds = ["checklist", "prefacturas", "facturas", "matrix", "calendar"];
+      const tabIds = ["checklist", "prefacturas", "facturas", "matrix", "calendar", "closing"];
       tabIds.forEach(id => {
         const el = document.getElementById(`tab${id.charAt(0).toUpperCase() + id.slice(1)}`);
         if (el) el.classList.add("hidden");
@@ -4773,6 +5340,220 @@
         renderIndependentMatrixTable();
         loadMatrixData();
       } else if (tabId === 'calendar') renderCalendar();
+      else if (tabId === 'closing') loadMonthlyClosingData();
+    }
+
+    // ==========================================
+    // TABLERO DE CIERRE MENSUAL & AUDITORÍA
+    // ==========================================
+    async function loadMonthlyClosingData() {
+      const monthSelect = document.getElementById("closingMonthSelect");
+      const month = monthSelect ? monthSelect.value : "Octubre";
+
+      try {
+        const res = await fetch(`/api/reports/monthly_closing?month=${encodeURIComponent(month)}`);
+        if (!res.ok) throw new Error("Error consultando cierre mensual");
+        const data = await res.json();
+        renderMonthlyClosingBoard(data);
+      } catch (err) {
+        console.error("Error al cargar cierre mensual:", err);
+      }
+    }
+
+    function renderMonthlyClosingBoard(data) {
+      if (!data) return;
+
+      // KPIs
+      const kpiRec = document.getElementById("closeKpiRecords");
+      if (kpiRec) kpiRec.innerText = data.total_records;
+
+      const kpiPref = document.getElementById("closeKpiPref");
+      if (kpiPref) kpiPref.innerText = data.totals.pref_val_fmt || "$ 0";
+
+      const kpiFac = document.getElementById("closeKpiFac");
+      if (kpiFac) kpiFac.innerText = data.totals.fac_val_fmt || "$ 0";
+
+      const kpiDiff = document.getElementById("closeKpiDiff");
+      if (kpiDiff) {
+        kpiDiff.innerText = data.totals.diff_val_fmt || "$ 0";
+        if (data.totals.diff_val > 0) {
+          kpiDiff.className = "text-2xl font-black text-rose-800 mt-1";
+        } else {
+          kpiDiff.className = "text-2xl font-black text-emerald-800 mt-1";
+        }
+      }
+
+      const kpiRate = document.getElementById("closeKpiRate");
+      if (kpiRate) kpiRate.innerText = `${data.closing_rate_pct}%`;
+
+      // Subtitles
+      const pCount = document.getElementById("closeKpiPrefCount");
+      if (pCount) pCount.innerText = `${data.funnel.step1_count} informes enviados`;
+
+      const fCount = document.getElementById("closeKpiFacCount");
+      if (fCount) fCount.innerText = `${data.funnel.step3_count} facturas emitidas`;
+
+      const rText = document.getElementById("closeKpiRateText");
+      if (rText) rText.innerText = `${data.completed_records} de ${data.total_records} radicados`;
+
+      // Funnel Progress
+      const f = data.funnel;
+      const s1Bar = document.getElementById("closeStep1Bar");
+      if (s1Bar) s1Bar.style.width = `${f.step1_pct}%`;
+      const s1Pct = document.getElementById("closeStep1Pct");
+      if (s1Pct) s1Pct.innerText = `${f.step1_pct}%`;
+      const s1Cnt = document.getElementById("closeStep1Count");
+      if (s1Cnt) s1Cnt.innerText = `${f.step1_count} de ${data.total_records} filas`;
+
+      const s2Bar = document.getElementById("closeStep2Bar");
+      if (s2Bar) s2Bar.style.width = `${f.step2_pct}%`;
+      const s2Pct = document.getElementById("closeStep2Pct");
+      if (s2Pct) s2Pct.innerText = `${f.step2_pct}%`;
+      const s2Cnt = document.getElementById("closeStep2Count");
+      if (s2Cnt) s2Cnt.innerText = `${f.step2_count} de ${data.total_records} filas`;
+
+      const s3Bar = document.getElementById("closeStep3Bar");
+      if (s3Bar) s3Bar.style.width = `${f.step3_pct}%`;
+      const s3Pct = document.getElementById("closeStep3Pct");
+      if (s3Pct) s3Pct.innerText = `${f.step3_pct}%`;
+      const s3Cnt = document.getElementById("closeStep3Count");
+      if (s3Cnt) s3Cnt.innerText = `${f.step3_count} de ${data.total_records} filas`;
+
+      const s4Bar = document.getElementById("closeStep4Bar");
+      if (s4Bar) s4Bar.style.width = `${f.step4_pct}%`;
+      const s4Pct = document.getElementById("closeStep4Pct");
+      if (s4Pct) s4Pct.innerText = `${f.step4_pct}%`;
+      const s4Cnt = document.getElementById("closeStep4Count");
+      if (s4Cnt) s4Cnt.innerText = `${f.step4_count} de ${data.total_records} filas`;
+
+      // Bottlenecks / Semáforo Crítico
+      const botBody = document.getElementById("closeBottlenecksBody");
+      const botBadge = document.getElementById("closeBottlenecksBadge");
+      if (botBadge) botBadge.innerText = `${data.bottlenecks_count} Alertas`;
+
+      if (botBody) {
+        if (!data.bottlenecks || data.bottlenecks.length === 0) {
+          botBody.innerHTML = `
+            <tr>
+              <td colspan="7" class="p-6 text-center text-emerald-700 font-bold bg-emerald-50/40 italic">
+                <i class="fa-solid fa-circle-check text-emerald-600 text-lg mb-1 block"></i>
+                ¡Excelente! No hay cuellos de botella ni alertas críticas pendientes en este mes.
+              </td>
+            </tr>
+          `;
+        } else {
+          botBody.innerHTML = data.bottlenecks.map(b => {
+            const isCrit = b.severity === "critical";
+            const sevBadge = isCrit
+              ? '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-100 text-rose-800 border border-rose-300">🔴 Crítico</span>'
+              : '<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300">🟡 Alerta</span>';
+            const valFmt = b.amount ? formatCurrencyString(b.amount) : "$ 0";
+
+            return `
+              <tr class="hover:bg-slate-50 transition">
+                <td class="p-2.5">${sevBadge}</td>
+                <td class="p-2.5 font-bold text-slate-900">${b.client_name}</td>
+                <td class="p-2.5">
+                  <span class="text-[10px] font-bold px-1.5 py-0.5 rounded ${b.resp === 'Edwar' ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800'}">
+                    ${b.resp}
+                  </span>
+                </td>
+                <td class="p-2.5 font-semibold text-slate-700">
+                  <div>${b.stage}</div>
+                  <div class="text-[10px] text-slate-500 font-normal mt-0.5">${b.details}</div>
+                </td>
+                <td class="p-2.5 text-center font-bold text-rose-700">${b.days_waiting}d</td>
+                <td class="p-2.5 font-mono font-bold text-slate-800">${valFmt}</td>
+                <td class="p-2.5 text-center">
+                  <button type="button" onclick="openEditRecordModal('${b.record_id}')" class="px-2.5 py-1 text-xs font-bold rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 transition" title="Editar y solucionar alerta">
+                    <i class="fa-solid fa-pen-to-square"></i>
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join("");
+        }
+      }
+
+      // Reconciliation by Responsable (Sol vs Edwar)
+      const respContainer = document.getElementById("closeRespCardsContainer");
+      if (respContainer && data.by_resp) {
+        respContainer.innerHTML = data.by_resp.map(r => {
+          const rate = r.total ? Math.round((r.completed / r.total) * 100) : 0;
+          const isEdwar = r.resp === "Edwar";
+          const themeCol = isEdwar ? "amber" : "pink";
+
+          return `
+            <div class="p-4 rounded-xl border border-slate-200 bg-slate-50/70 space-y-2.5">
+              <div class="flex items-center justify-between">
+                <div class="flex items-center gap-2">
+                  <span class="w-7 h-7 rounded-lg ${isEdwar ? 'bg-amber-100 text-amber-800' : 'bg-pink-100 text-pink-800'} flex items-center justify-center font-bold text-xs">
+                    ${isEdwar ? '🐉' : '🐱'}
+                  </span>
+                  <div>
+                    <h4 class="font-extrabold text-xs text-slate-900">${r.resp}</h4>
+                    <p class="text-[10px] text-slate-500">${r.total} empresas asignadas</p>
+                  </div>
+                </div>
+                <span class="text-xs font-black ${rate === 100 ? 'text-emerald-700' : 'text-slate-700'}">${rate}% Cierre</span>
+              </div>
+
+              <div class="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                <div class="bg-${themeCol}-600 h-1.5 rounded-full" style="width: ${rate}%"></div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2 text-[11px] pt-1 border-t border-slate-200/60">
+                <div>
+                  <span class="text-slate-400 block text-[9px] uppercase font-bold">Prefacturado</span>
+                  <span class="font-bold text-slate-800 font-mono">${formatCurrencyString(r.pref_sum) || '$ 0'}</span>
+                </div>
+                <div>
+                  <span class="text-slate-400 block text-[9px] uppercase font-bold">Facturado Real</span>
+                  <span class="font-bold text-emerald-800 font-mono">${formatCurrencyString(r.fac_sum) || '$ 0'}</span>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between text-[10px] font-semibold text-slate-600 pt-1">
+                <span>✓ ${r.completed} completados</span>
+                <span class="text-amber-700 font-bold">⏳ ${r.total - r.completed} pendientes</span>
+              </div>
+            </div>
+          `;
+        }).join("");
+      }
+    }
+
+    function downloadExecutiveClosingExcel() {
+      const monthSelect = document.getElementById("closingMonthSelect");
+      const month = monthSelect ? monthSelect.value : "Octubre";
+      window.location.href = `/api/reports/export_closing_excel?month=${encodeURIComponent(month)}`;
+    }
+
+    // ==========================================
+    // DIAGNÓSTICO EN TIEMPO REAL DE LA NUBE
+    // ==========================================
+    async function updateCloudStatusBadge() {
+      const badge = document.getElementById("cloudStatusBadge");
+      const text = document.getElementById("cloudStatusText");
+      if (!badge || !text) return;
+
+      try {
+        const res = await fetch("/api/cloud/status");
+        if (res.ok) {
+          const data = await res.json();
+          if (data.use_postgres) {
+            badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-300 text-[11px] font-bold shadow-2xs";
+            text.innerHTML = `<i class="fa-solid fa-cloud text-emerald-600"></i> Supabase/Neon Cloud (${data.records_count} filas)`;
+            badge.title = `Conectado a Base de Datos PostgreSQL en la Nube. Storage: ${data.cloud_storage_bucket}`;
+          } else {
+            badge.className = "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-50 text-sky-800 border border-sky-300 text-[11px] font-bold shadow-2xs";
+            text.innerHTML = `<i class="fa-solid fa-database text-sky-600"></i> Local SQLite + Backup (${data.records_count} filas)`;
+            badge.title = `Base de Datos local activa con auto-archivo binario. Para conectar Supabase o Neon, configure DATABASE_URL.`;
+          }
+        }
+      } catch (e) {
+        text.innerText = "Nube: Modo Offline";
+      }
     }
 
     function downloadExcel() {
