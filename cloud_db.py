@@ -13,11 +13,6 @@ import datetime
 import re
 from typing import List, Dict, Any, Optional, Tuple, Union
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "").strip()
-SUPABASE_URL = os.environ.get("SUPABASE_URL", "").strip()
-SUPABASE_KEY = os.environ.get("SUPABASE_KEY", "").strip()
-SUPABASE_BUCKET = os.environ.get("SUPABASE_BUCKET", "facturas-docs").strip()
-
 # Check for psycopg2 availability
 HAS_PSYCOPG2 = False
 try:
@@ -27,10 +22,16 @@ try:
 except ImportError:
     pass
 
-# Determine if cloud PostgreSQL is active
-USE_POSTGRES = bool(DATABASE_URL and HAS_PSYCOPG2 and (
-    DATABASE_URL.startswith("postgresql://") or DATABASE_URL.startswith("postgres://")
-))
+def is_postgres_configured() -> bool:
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    return bool(db_url and HAS_PSYCOPG2 and (
+        db_url.startswith("postgresql://") or db_url.startswith("postgres://")
+    ))
+
+# Backward compatibility flag
+@property
+def USE_POSTGRES():
+    return is_postgres_configured()
 
 DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "facturacion.db")
 
@@ -247,16 +248,35 @@ class CloudConnection:
             self.commit()
 
 
+LAST_PG_ERROR = None
+
 def get_db() -> CloudConnection:
-    """Returns a unified CloudConnection connected to PostgreSQL or SQLite."""
-    if USE_POSTGRES:
-        pg_url = DATABASE_URL
+    """Returns a unified CloudConnection connected to PostgreSQL or SQLite with seamless fallback."""
+    global LAST_PG_ERROR
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    use_pg = bool(db_url and HAS_PSYCOPG2 and (
+        db_url.startswith("postgresql://") or db_url.startswith("postgres://")
+    ))
+    if use_pg:
+        pg_url = db_url
         if pg_url.startswith("postgres://"):
             pg_url = "postgresql://" + pg_url[11:]
+        # Sanitize parameters for maximum driver compatibility
+        pg_url = re.sub(r'[&?]channel_binding=[^&]*', '', pg_url)
         if "sslmode" not in pg_url and "?" not in pg_url:
             pg_url += "?sslmode=require"
-        conn = psycopg2.connect(pg_url)
-        return CloudConnection(conn, True)
+        elif "sslmode" not in pg_url:
+            pg_url += "&sslmode=require"
+        try:
+            conn = psycopg2.connect(pg_url, connect_timeout=10)
+            LAST_PG_ERROR = None
+            return CloudConnection(conn, True)
+        except Exception as e:
+            LAST_PG_ERROR = str(e)
+            print(f"⚠️ Error conectando a PostgreSQL ({e}). Activando fallback automático a SQLite local.")
+            conn = sqlite3.connect(DB_PATH)
+            conn.row_factory = sqlite3.Row
+            return CloudConnection(conn, False)
     else:
         conn = sqlite3.connect(DB_PATH)
         conn.row_factory = sqlite3.Row
@@ -265,14 +285,25 @@ def get_db() -> CloudConnection:
 
 def get_cloud_status() -> Dict[str, Any]:
     """Provides operational cloud health diagnostics."""
+    db_url = os.environ.get("DATABASE_URL", "").strip()
+    sub_url = (os.environ.get("SUPABASE_URL") or os.environ.get("SUPEBASE_URL") or "").strip()
+    sub_key = (os.environ.get("SUPABASE_KEY") or os.environ.get("SUPEBASE_KEY") or "").strip()
+    sub_bucket = (os.environ.get("SUPABASE_BUCKET") or os.environ.get("SUPEBASE_BUCKET") or "facturas-docs").strip()
+
+    use_pg = bool(db_url and HAS_PSYCOPG2 and (
+        db_url.startswith("postgresql://") or db_url.startswith("postgres://")
+    ))
+
     status = {
-        "use_postgres": USE_POSTGRES,
-        "database_engine": "PostgreSQL (Cloud Supabase/Neon)" if USE_POSTGRES else "SQLite (Local facturacion.db)",
-        "cloud_storage_active": bool(SUPABASE_URL and SUPABASE_KEY),
-        "cloud_storage_bucket": SUPABASE_BUCKET if (SUPABASE_URL and SUPABASE_KEY) else "Local (/uploads & DB archive)",
+        "use_postgres": use_pg,
+        "database_engine": "PostgreSQL (Cloud Supabase/Neon)" if use_pg else "SQLite (Local facturacion.db)",
+        "cloud_storage_active": bool(sub_url and sub_key),
+        "cloud_storage_bucket": sub_bucket if (sub_url and sub_key) else "Local (/uploads & DB archive)",
         "connected": False,
         "records_count": 0,
-        "clients_count": 0
+        "clients_count": 0,
+        "database_url_present": bool(db_url),
+        "has_psycopg2": HAS_PSYCOPG2
     }
     try:
         conn = get_db()
@@ -281,8 +312,17 @@ def get_cloud_status() -> Dict[str, Any]:
         status["clients_count"] = c.fetchone()[0]
         c.execute("SELECT COUNT(*) FROM billing_records")
         status["records_count"] = c.fetchone()[0]
-        conn.close()
         status["connected"] = True
+        status["use_postgres"] = getattr(conn, "is_pg", False)
+        if getattr(conn, "is_pg", False):
+            status["database_engine"] = "PostgreSQL (Cloud Supabase/Neon)"
+        else:
+            if db_url:
+                status["database_engine"] = "SQLite (Fallback por error en PostgreSQL)"
+                status["pg_connection_error"] = LAST_PG_ERROR
+            else:
+                status["database_engine"] = "SQLite (Local facturacion.db)"
+        conn.close()
     except Exception as e:
         status["error"] = str(e)
     return status
@@ -293,22 +333,25 @@ async def upload_file_to_cloud(file_bytes: bytes, filename: str, content_type: s
     Uploads a file to Supabase Storage bucket if credentials are configured.
     Returns the public URL, or None if cloud storage is not configured.
     """
-    if not (SUPABASE_URL and SUPABASE_KEY):
+    sub_url = (os.environ.get("SUPABASE_URL") or os.environ.get("SUPEBASE_URL") or "").strip()
+    sub_key = (os.environ.get("SUPABASE_KEY") or os.environ.get("SUPEBASE_KEY") or "").strip()
+    sub_bucket = (os.environ.get("SUPABASE_BUCKET") or os.environ.get("SUPEBASE_BUCKET") or "facturas-docs").strip()
+    if not (sub_url and sub_key):
         return None
 
     try:
         import httpx
-        url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/{SUPABASE_BUCKET}/{filename}"
+        url = f"{sub_url.rstrip('/')}/storage/v1/object/{sub_bucket}/{filename}"
         headers = {
-            "Authorization": f"Bearer {SUPABASE_KEY}",
-            "apikey": SUPABASE_KEY,
+            "Authorization": f"Bearer {sub_key}",
+            "apikey": sub_key,
             "Content-Type": content_type or "application/octet-stream",
             "x-upsert": "true"
         }
         async with httpx.AsyncClient(timeout=30.0) as client:
             resp = await client.post(url, content=file_bytes, headers=headers)
             if resp.status_code in (200, 201):
-                public_url = f"{SUPABASE_URL.rstrip('/')}/storage/v1/object/public/{SUPABASE_BUCKET}/{filename}"
+                public_url = f"{sub_url.rstrip('/')}/storage/v1/object/public/{sub_bucket}/{filename}"
                 return public_url
             else:
                 print(f"Supabase Storage respondió status {resp.status_code}: {resp.text}")
