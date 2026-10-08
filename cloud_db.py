@@ -97,6 +97,12 @@ def translate_sql(sql: str, is_pg: bool, has_params: bool = False) -> str:
     translated = re.sub(r'BOOLEAN\s+DEFAULT\s+0', 'BOOLEAN DEFAULT FALSE', translated, flags=re.IGNORECASE)
     translated = re.sub(r'BOOLEAN\s+DEFAULT\s+1', 'BOOLEAN DEFAULT TRUE', translated, flags=re.IGNORECASE)
 
+    # Coerce step[1-4] = 0 or 1 in UPDATE queries
+    translated = re.sub(r'\bstep([1-4])\s*=\s*0\b', r'step\1 = FALSE', translated, flags=re.IGNORECASE)
+    translated = re.sub(r'\bstep([1-4])\s*=\s*1\b', r'step\1 = TRUE', translated, flags=re.IGNORECASE)
+    # Coerce literal 0 in step3/step4 VALUES tuples
+    translated = re.sub(r',\s*0\s*,\s*\'\'\s*,\s*\'\'\s*,\s*\'\'\s*,\s*0\s*,', r', FALSE, \'\', \'\', \'\', FALSE,', translated)
+
     # Replace SQLite INSERT OR IGNORE
     if "INSERT OR IGNORE INTO cargos" in translated:
         translated = translated.replace("INSERT OR IGNORE INTO cargos (title) VALUES (%s)",
@@ -127,6 +133,28 @@ def translate_sql(sql: str, is_pg: bool, has_params: bool = False) -> str:
     return translated
 
 
+def _sanitize_pg_params(sql: str, params: tuple) -> tuple:
+    """Ensures booleans and binaries are properly adapted for psycopg2."""
+    if not params:
+        return ()
+    if not isinstance(params, (tuple, list)):
+        params = (params,)
+    clean = []
+    # Check if this is an UPDATE stepX = %s
+    m = re.search(r'\bSET\s+step([1-4])\s*=\s*%s', sql, re.IGNORECASE)
+    for idx, p in enumerate(params):
+        if isinstance(p, (bytes, bytearray)):
+            clean.append(psycopg2.Binary(p))
+        elif m and idx == 0 and not isinstance(p, bool):
+            if isinstance(p, str):
+                clean.append(p.lower() in ("1", "true", "t", "yes", "si"))
+            else:
+                clean.append(bool(p) if p is not None else False)
+        else:
+            clean.append(p)
+    return tuple(clean)
+
+
 class CloudCursor:
     def __init__(self, raw_cursor, is_pg: bool):
         self._c = raw_cursor
@@ -138,17 +166,8 @@ class CloudCursor:
 
         if self.is_pg:
             if has_params:
-                # PostgreSQL requires params as tuple or list
-                if not isinstance(params, (tuple, list)):
-                    params = (params,)
-                # Adapt any binary bytes for psycopg2
-                clean_params = []
-                for p in params:
-                    if isinstance(p, (bytes, bytearray)):
-                        clean_params.append(psycopg2.Binary(p))
-                    else:
-                        clean_params.append(p)
-                return self._c.execute(final_sql, tuple(clean_params))
+                clean_params = _sanitize_pg_params(final_sql, params)
+                return self._c.execute(final_sql, clean_params)
             else:
                 return self._c.execute(final_sql)
         else:
@@ -157,10 +176,7 @@ class CloudCursor:
     def executemany(self, sql: str, seq_of_parameters):
         final_sql = translate_sql(sql, self.is_pg, has_params=True)
         if self.is_pg:
-            clean_seq = []
-            for params in seq_of_parameters:
-                clean_params = [psycopg2.Binary(p) if isinstance(p, (bytes, bytearray)) else p for p in params]
-                clean_seq.append(tuple(clean_params))
+            clean_seq = [_sanitize_pg_params(final_sql, params) for params in seq_of_parameters]
             return self._c.executemany(final_sql, clean_seq)
         else:
             return self._c.executemany(final_sql, seq_of_parameters)

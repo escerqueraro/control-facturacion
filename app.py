@@ -284,13 +284,13 @@ def init_db():
                 f_type = "Mensual"
                 p_detail = "Mes Completo"
 
-            step1_def = 0
-            step2_def = 0
+            step1_def = False
+            step2_def = False
 
             cursor.execute("""
             INSERT INTO billing_records
             (record_id, client_id, client_name, freq_type, month, period_detail, period_key, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, step4, step4_date, notes, updated_by, updated_at)
-            VALUES (?, ?, ?, ?, 'Octubre', ?, 'OCT_1Q', ?, '', '', '', ?, '', '', '', 0, '', '', '', 0, '', '', 'Sistema', ?)
+            VALUES (?, ?, ?, ?, 'Octubre', ?, 'OCT_1Q', ?, '', '', '', ?, '', '', '', FALSE, '', '', '', FALSE, '', '', 'Sistema', ?)
             """, (rec_id, cid, cname, f_type, p_detail, step1_def, step2_def, now_iso))
         conn.commit()
 
@@ -326,11 +326,11 @@ def init_db():
     """)
     cursor.execute("""
     UPDATE billing_records
-    SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
-        step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
-        step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+    SET step1 = FALSE, step1_date = '', pref_num = '', pref_val = '',
+        step2 = FALSE, step2_oc = '', step2_date = '', oc_val = '',
+        step3 = FALSE, step3_fac = '', step3_date = '', fac_val = '',
         fac_pdf_url = '', report_doc_url = '',
-        step4 = 0, step4_date = '', notes = ''
+        step4 = FALSE, step4_date = '', notes = ''
     WHERE record_id IN ('rec_1_default', 'rec_5_default') AND (pref_num = 'PF-AF-2026-01' OR step3_fac = 'FAC-AV-01' OR fac_val = '$ 4.500.000')
     """)
     cursor.execute("DELETE FROM uploaded_files_archive WHERE filename LIKE '%test%' OR record_id LIKE '%test%' OR record_id = 'rec_test_recovery'")
@@ -658,8 +658,8 @@ async def create_admin_client(req: AdminClientCreateRequest):
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     rec_id = f"rec_{new_id}_default"
     p_detail = "1Q" if req.freq_type == "Quincenal" else ("Semana 1" if req.freq_type == "Semanal" else ("Servicio" if req.freq_type == "Por Evento" else "Mes Completo"))
-    step1_def = 0 if req.req_inf else 1
-    step2_def = 0 if req.req_oc else 1
+    step1_def = False if req.req_inf else True
+    step2_def = False if req.req_oc else True
     cursor.execute("""
     INSERT INTO billing_records
     (record_id, client_id, client_name, freq_type, month, period_detail, period_key, step1, step2, updated_by, updated_at)
@@ -959,14 +959,14 @@ async def create_record(req: CreateRecordRequest):
     new_id = f"rec_{req.client_id}_{uuid.uuid4().hex[:8]}"
     now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
-    step1_def = 0
-    step2_def = 0
+    step1_def = False
+    step2_def = False
 
     area_group_val = req.area_group.strip() if req.area_group else ""
     cursor.execute("""
     INSERT INTO billing_records
     (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group, step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val, step3, step3_fac, step3_date, fac_val, step4, step4_date, notes, updated_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, 'CUSTOM', ?, ?, '', '', '', ?, '', '', '', 0, '', '', '', 0, '', '', ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, 'CUSTOM', ?, ?, '', '', '', ?, '', '', '', FALSE, '', '', '', FALSE, '', '', ?, ?)
     """, (new_id, req.client_id, c_meta["name"], req.freq_type, req.month, req.period_detail, area_group_val, step1_def, step2_def, req.updated_by, now_iso))
     conn.commit()
     conn.close()
@@ -1001,11 +1001,11 @@ async def create_record(req: CreateRecordRequest):
         "step2_oc": "",
         "step2_date": "",
         "oc_val": "",
-        "step3": 0,
+        "step3": False,
         "step3_fac": "",
         "step3_date": "",
         "fac_val": "",
-        "step4": 0,
+        "step4": False,
         "step4_date": "",
         "notes": "",
         "updated_by": req.updated_by,
@@ -1039,8 +1039,15 @@ async def update_record_field(req: UpdateRecordFieldRequest):
     conn = get_db_connection()
     cursor = conn.cursor()
 
+    val = req.value
+    if req.field in ("step1", "step2", "step3", "step4"):
+        if isinstance(val, str):
+            val = val.lower() in ("1", "true", "t", "yes", "si")
+        else:
+            val = bool(val)
+
     sql = f"UPDATE billing_records SET {req.field} = ?, updated_by = ?, updated_at = ? WHERE record_id = ?"
-    cursor.execute(sql, (req.value, req.updated_by, now_iso, req.record_id))
+    cursor.execute(sql, (val, req.updated_by, now_iso, req.record_id))
     conn.commit()
     conn.close()
 
@@ -1125,22 +1132,22 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
         new_record_id, current_data["client_id"], current_data["client_name"],
         current_data["freq_type"], current_data["month"], current_data["period_detail"], current_data["period_key"],
         current_data.get("area_group", ""),
-        current_data["step1"], current_data["step1_date"], current_data["pref_num"], current_data["pref_val"],
-        current_data["step2"], current_data["step2_oc"], current_data["step2_date"], current_data["oc_val"],
-        current_data["step3"], current_data["step3_fac"], current_data["step3_date"], current_data["fac_val"],
+        bool(current_data["step1"]), current_data["step1_date"], current_data["pref_num"], current_data["pref_val"],
+        bool(current_data["step2"]), current_data["step2_oc"], current_data["step2_date"], current_data["oc_val"],
+        bool(current_data["step3"]), current_data["step3_fac"], current_data["step3_date"], current_data["fac_val"],
         current_data.get("fac_pdf_url", ""), current_data.get("report_doc_url", ""),
-        current_data["step4"], current_data["step4_date"],
+        bool(current_data["step4"]), current_data["step4_date"],
         current_data["notes"], req.author, now_iso
     ))
 
     # Reset the active input record (req.record_id) to empty/clean state!
     cursor.execute("""
     UPDATE billing_records
-    SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
-        step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
-        step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+    SET step1 = FALSE, step1_date = '', pref_num = '', pref_val = '',
+        step2 = FALSE, step2_oc = '', step2_date = '', oc_val = '',
+        step3 = FALSE, step3_fac = '', step3_date = '', fac_val = '',
         fac_pdf_url = '', report_doc_url = '',
-        step4 = 0, step4_date = '', notes = '',
+        step4 = FALSE, step4_date = '', notes = '',
         updated_by = ?, updated_at = ?
     WHERE record_id = ?
     """, (req.author, now_iso, req.record_id))
@@ -1214,10 +1221,10 @@ async def update_record_full(req: UpdateFullRecordRequest):
     WHERE record_id = ?
     """, (
         req.freq_type, req.month, req.period_detail, req.area_group,
-        1 if req.step1 else 0, req.step1_date, req.pref_num, req.pref_val,
-        1 if req.step2 else 0, req.step2_oc, req.step2_date, req.oc_val,
-        1 if req.step3 else 0, req.step3_fac, req.step3_date, req.fac_val,
-        1 if req.step4 else 0, req.step4_date, req.notes,
+        bool(req.step1), req.step1_date, req.pref_num, req.pref_val,
+        bool(req.step2), req.step2_oc, req.step2_date, req.oc_val,
+        bool(req.step3), req.step3_fac, req.step3_date, req.fac_val,
+        bool(req.step4), req.step4_date, req.notes,
         req.fac_pdf_url, req.report_doc_url,
         req.updated_by, now_iso, req.record_id
     ))
@@ -1259,11 +1266,11 @@ async def delete_record(record_id: str, user: str = "Sistema"):
         # If it's the only row for this client, reset it to empty/clean rather than throwing an error
         cursor.execute("""
         UPDATE billing_records
-        SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
-            step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
-            step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+        SET step1 = FALSE, step1_date = '', pref_num = '', pref_val = '',
+            step2 = FALSE, step2_oc = '', step2_date = '', oc_val = '',
+            step3 = FALSE, step3_fac = '', step3_date = '', fac_val = '',
             fac_pdf_url = '', report_doc_url = '',
-            step4 = 0, step4_date = '', notes = '', area_group = '',
+            step4 = FALSE, step4_date = '', notes = '', area_group = '',
             updated_by = ?, updated_at = ?
         WHERE record_id = ?
         """, (user, now_iso, record_id))
@@ -1387,9 +1394,9 @@ async def upload_file(
     """, (file_url, unique_name, file.content_type or 'application/octet-stream', content, record_id, doc_type, now_iso))
 
     if doc_type == "report_doc":
-        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step1 = 1, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
+        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step1 = TRUE, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
     elif doc_type == "fac_pdf":
-        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step3 = 1, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
+        cursor.execute(f"UPDATE billing_records SET {col_name} = ?, step3 = TRUE, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
     else:
         cursor.execute(f"UPDATE billing_records SET {col_name} = ?, updated_at = ? WHERE record_id = ?", (file_url, now_iso, record_id))
     conn.commit()
@@ -1539,11 +1546,11 @@ async def import_backup(data: dict):
             """, (
                 r.get("record_id"), r.get("client_id"), r.get("client_name"), r.get("freq_type"), r.get("month"), r.get("period_detail"),
                 r.get("period_key", "OCT_1Q"), r.get("area_group", ""),
-                1 if r.get("step1") else 0, r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
-                1 if r.get("step2") else 0, r.get("step2_oc", ""), r.get("step2_date", ""), r.get("oc_val", ""),
-                1 if r.get("step3") else 0, r.get("step3_fac", ""), r.get("step3_date", ""), r.get("fac_val", ""),
+                bool(r.get("step1")), r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
+                bool(r.get("step2")), r.get("step2_oc", ""), r.get("step2_date", ""), r.get("oc_val", ""),
+                bool(r.get("step3")), r.get("step3_fac", ""), r.get("step3_date", ""), r.get("fac_val", ""),
                 r.get("fac_pdf_url", ""), r.get("report_doc_url", ""),
-                1 if r.get("step4") else 0, r.get("step4_date", ""), r.get("notes", ""), r.get("updated_by", "Restauración"), now_iso
+                bool(r.get("step4")), r.get("step4_date", ""), r.get("notes", ""), r.get("updated_by", "Restauración"), now_iso
             ))
 
     # Restore matrix cells
@@ -1615,11 +1622,11 @@ async def sync_client_cache(payload: dict):
         """, (
             rec_id, r.get("client_id"), r.get("client_name"), r.get("freq_type", "Mensual"), r.get("month", "Octubre"),
             r.get("period_detail", "Mes Completo"), r.get("period_key", "OCT_1Q"), r.get("area_group", ""),
-            1 if r.get("step1") else 0, r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
-            1 if r.get("step2") else 0, r.get("step2_oc", ""), r.get("step2_date", ""), r.get("oc_val", ""),
-            1 if r.get("step3") else 0, r.get("step3_fac", ""), r.get("step3_date", ""), r.get("fac_val", ""),
+            bool(r.get("step1")), r.get("step1_date", ""), r.get("pref_num", ""), r.get("pref_val", ""),
+            bool(r.get("step2")), r.get("step2_oc", ""), r.get("step2_date", ""), r.get("oc_val", ""),
+            bool(r.get("step3")), r.get("step3_fac", ""), r.get("step3_date", ""), r.get("fac_val", ""),
             r.get("fac_pdf_url", ""), r.get("report_doc_url", ""),
-            1 if r.get("step4") else 0, r.get("step4_date", ""), r.get("notes", ""), r.get("updated_by", "AutoSync"), now_iso
+            bool(r.get("step4")), r.get("step4_date", ""), r.get("notes", ""), r.get("updated_by", "AutoSync"), now_iso
         ))
         synced_count += 1
 
@@ -1647,11 +1654,11 @@ async def clean_test_data():
     """)
     cursor.execute("""
     UPDATE billing_records
-    SET step1 = 0, step1_date = '', pref_num = '', pref_val = '',
-        step2 = 0, step2_oc = '', step2_date = '', oc_val = '',
-        step3 = 0, step3_fac = '', step3_date = '', fac_val = '',
+    SET step1 = FALSE, step1_date = '', pref_num = '', pref_val = '',
+        step2 = FALSE, step2_oc = '', step2_date = '', oc_val = '',
+        step3 = FALSE, step3_fac = '', step3_date = '', fac_val = '',
         fac_pdf_url = '', report_doc_url = '',
-        step4 = 0, step4_date = '', notes = ''
+        step4 = FALSE, step4_date = '', notes = ''
     WHERE record_id IN ('rec_1_default', 'rec_5_default')
     """)
     cursor.execute("DELETE FROM uploaded_files_archive WHERE filename LIKE '%test%' OR record_id LIKE '%test%' OR record_id = 'rec_test_recovery'")
