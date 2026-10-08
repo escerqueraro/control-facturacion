@@ -191,7 +191,16 @@ def init_db():
     add_col_if_missing("billing_records", "area_group", "TEXT DEFAULT ''")
     add_col_if_missing("billing_records", "fac_pdf_url", "TEXT DEFAULT ''")
     add_col_if_missing("billing_records", "report_doc_url", "TEXT DEFAULT ''")
+    add_col_if_missing("billing_records", "linked_pref_nums", "TEXT DEFAULT ''")
+    add_col_if_missing("billing_records", "is_committed", "INTEGER DEFAULT 0")
     add_col_if_missing("system_users", "permissions", "TEXT DEFAULT 'total'")
+
+    try:
+        cursor.execute("UPDATE billing_records SET is_committed = 0 WHERE record_id LIKE '%_default'")
+        cursor.execute("UPDATE billing_records SET is_committed = 1 WHERE record_id NOT LIKE '%_default'")
+        conn.commit()
+    except Exception:
+        pass
 
     # 6. File Archive Table (Persistent file storage across container restarts)
     cursor.execute("""
@@ -1029,7 +1038,8 @@ async def update_record_field(req: UpdateRecordFieldRequest):
         "step2", "step2_oc", "step2_date", "oc_val",
         "step3", "step3_fac", "step3_date", "fac_val",
         "step4", "step4_date", "notes",
-        "area_group", "fac_pdf_url", "report_doc_url"
+        "area_group", "fac_pdf_url", "report_doc_url",
+        "linked_pref_nums", "is_committed"
     ]
     if req.field not in allowed_fields:
         raise HTTPException(status_code=400, detail="Campo no permitido")
@@ -1089,6 +1099,7 @@ class CommitAndResetRequest(BaseModel):
     notes: Optional[str] = None
     fac_pdf_url: Optional[str] = None
     report_doc_url: Optional[str] = None
+    linked_pref_nums: Optional[str] = ""
 
 @app.post("/api/records/commit_and_reset")
 async def commit_and_reset_record(req: CommitAndResetRequest):
@@ -1109,7 +1120,7 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
         "step2", "step2_oc", "step2_date", "oc_val",
         "step3", "step3_fac", "step3_date", "fac_val",
         "step4", "step4_date", "notes",
-        "fac_pdf_url", "report_doc_url"
+        "fac_pdf_url", "report_doc_url", "linked_pref_nums"
     ]:
         val = getattr(req, field_name, None)
         if val is not None:
@@ -1120,14 +1131,14 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
     # Generate unique ID for this committed record
     new_record_id = f"rec_{req.client_id}_{uuid.uuid4().hex[:8]}"
 
-    # Insert permanent consolidated record
+    # Insert permanent consolidated record with is_committed = 1
     cursor.execute("""
     INSERT INTO billing_records
     (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group,
      step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val,
      step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date,
-     notes, updated_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     notes, linked_pref_nums, is_committed, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     """, (
         new_record_id, current_data["client_id"], current_data["client_name"],
         current_data["freq_type"], current_data["month"], current_data["period_detail"], current_data["period_key"],
@@ -1137,17 +1148,17 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
         bool(current_data["step3"]), current_data["step3_fac"], current_data["step3_date"], current_data["fac_val"],
         current_data.get("fac_pdf_url", ""), current_data.get("report_doc_url", ""),
         bool(current_data["step4"]), current_data["step4_date"],
-        current_data["notes"], req.author, now_iso
+        current_data["notes"], current_data.get("linked_pref_nums", ""), req.author, now_iso
     ))
 
-    # Reset the active input record (req.record_id) to empty/clean state!
+    # Reset the active input record (req.record_id) to empty/clean state and is_committed = 0!
     cursor.execute("""
     UPDATE billing_records
     SET step1 = FALSE, step1_date = '', pref_num = '', pref_val = '',
         step2 = FALSE, step2_oc = '', step2_date = '', oc_val = '',
         step3 = FALSE, step3_fac = '', step3_date = '', fac_val = '',
         fac_pdf_url = '', report_doc_url = '',
-        step4 = FALSE, step4_date = '', notes = '',
+        step4 = FALSE, step4_date = '', notes = '', linked_pref_nums = '', is_committed = 0,
         updated_by = ?, updated_at = ?
     WHERE record_id = ?
     """, (req.author, now_iso, req.record_id))
@@ -1200,6 +1211,7 @@ class UpdateFullRecordRequest(BaseModel):
     notes: Optional[str] = ""
     fac_pdf_url: Optional[str] = ""
     report_doc_url: Optional[str] = ""
+    linked_pref_nums: Optional[str] = ""
     updated_by: Optional[str] = "Sistema"
 
 @app.post("/api/records/update_full")
@@ -1216,7 +1228,7 @@ async def update_record_full(req: UpdateFullRecordRequest):
         step2 = ?, step2_oc = ?, step2_date = ?, oc_val = ?,
         step3 = ?, step3_fac = ?, step3_date = ?, fac_val = ?,
         step4 = ?, step4_date = ?, notes = ?,
-        fac_pdf_url = ?, report_doc_url = ?,
+        fac_pdf_url = ?, report_doc_url = ?, linked_pref_nums = ?, is_committed = 1,
         updated_by = ?, updated_at = ?
     WHERE record_id = ?
     """, (
@@ -1225,7 +1237,7 @@ async def update_record_full(req: UpdateFullRecordRequest):
         bool(req.step2), req.step2_oc, req.step2_date, req.oc_val,
         bool(req.step3), req.step3_fac, req.step3_date, req.fac_val,
         bool(req.step4), req.step4_date, req.notes,
-        req.fac_pdf_url, req.report_doc_url,
+        req.fac_pdf_url, req.report_doc_url, req.linked_pref_nums or "",
         req.updated_by, now_iso, req.record_id
     ))
     conn.commit()
@@ -1845,6 +1857,7 @@ def get_monthly_closing_report(month: Optional[str] = "Octubre"):
         except Exception:
             return None
 
+    seen_fac_nums = set()
     for r in records:
         cid = r["client_id"]
         c_meta = clients.get(cid, {})
@@ -1852,10 +1865,25 @@ def get_monthly_closing_report(month: Optional[str] = "Octubre"):
         req_oc = bool(c_meta.get("req_oc", 1))
         req_inf = bool(c_meta.get("req_inf", 1))
 
-        p_val = parse_money(r["pref_val"])
-        f_val = parse_money(r["fac_val"])
+        # Check if record is a draft in active capture panel
+        is_comm = r.get("is_committed") if hasattr(r, "get") else None
+        if is_comm is None:
+            is_comm = not str(r["record_id"]).endswith("_default")
+        
+        is_draft_slot = (not is_comm and str(r["record_id"]).endswith("_default"))
+
+        p_val = parse_money(r["pref_val"]) if not is_draft_slot else 0.0
+        f_val = parse_money(r["fac_val"]) if not is_draft_slot else 0.0
+        fac_num = str(r["step3_fac"] or "").strip().upper()
+
         pref_total += p_val
-        fac_total += f_val
+        if f_val > 0:
+            if fac_num:
+                if fac_num not in seen_fac_nums:
+                    seen_fac_nums.add(fac_num)
+                    fac_total += f_val
+            else:
+                fac_total += f_val
 
         if resp not in by_resp:
             by_resp[resp] = {

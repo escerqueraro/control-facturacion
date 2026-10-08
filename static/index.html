@@ -1397,6 +1397,24 @@
               <input type="text" id="editRecFacVal" placeholder="$ 0" oninput="formatMoneyInputDirect(this)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-emerald-950 focus:ring-1 focus:ring-emerald-500">
             </div>
           </div>
+          <!-- Componente Enfoque Híbrido: Multi-asociación de prefacturas en Modal -->
+          <div id="editModalPrefAssocSection" class="hidden pt-2 border-t border-emerald-200/80">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="font-bold text-[11px] text-emerald-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-link text-emerald-600"></i>
+                <span>Asociar Pre-factura(s) amparadas por esta Factura</span>
+              </span>
+              <span id="editModalPrefAssocCount" class="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded"></span>
+            </div>
+            <div id="editModalPrefAssocList" class="p-2 bg-white rounded-xl border border-emerald-200 max-h-32 overflow-y-auto space-y-1"></div>
+            <div class="flex items-center justify-between mt-1.5 pt-1.5 border-t border-emerald-200 text-xs font-bold text-emerald-950">
+              <div>Suma seleccionada: <span id="editModalPrefAssocSumVal" class="font-mono text-emerald-800">$ 0</span></div>
+              <button type="button" onclick="applyEditModalPrefAssocSum()" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs transition active:scale-95">
+                Copiar a Valor Factura
+              </button>
+            </div>
+            <input type="hidden" id="editRecLinkedPrefNums" value="">
+          </div>
           <!-- Archivo Factura PDF -->
           <div class="pt-1" id="editRecFacPdfContainer">
             <div ondragover="handleModalDragOver(event, 'fac_pdf')" ondragleave="handleModalDragLeave(event, 'fac_pdf')" ondrop="handleModalDrop(event, 'fac_pdf')"
@@ -2682,6 +2700,37 @@
       }
     }
 
+    // ==========================================
+    // RECORD VALIDATION & COMMITMENT HELPERS
+    // ==========================================
+    function isRecordWithData(r) {
+      if (!r) return false;
+      return Boolean(
+        r.step1 ||
+        (r.pref_num && String(r.pref_num).trim() !== "") ||
+        (r.pref_val && parseMoney(r.pref_val) > 0) ||
+        r.step2 ||
+        (r.step2_oc && String(r.step2_oc).trim() !== "") ||
+        r.step3 ||
+        (r.step3_fac && String(r.step3_fac).trim() !== "") ||
+        (r.fac_val && parseMoney(r.fac_val) > 0) ||
+        r.step4 ||
+        (r.fac_pdf_url && String(r.fac_pdf_url).trim() !== "") ||
+        (r.report_doc_url && String(r.report_doc_url).trim() !== "") ||
+        (r.notes && String(r.notes).trim() !== "")
+      );
+    }
+
+    function isRecordCommitted(r) {
+      if (!r || !r.record_id) return false;
+      // Slots de captura borradores no confirmados terminan en _default
+      if (r.record_id.endsWith('_default')) return false;
+      // Si explícitamente está marcado como no confirmado
+      if (r.is_committed === 0 || r.is_committed === false) return false;
+      // Debe contener datos operativos reales
+      return isRecordWithData(r);
+    }
+
     function updateRowBadges(recordId) {
       const rec = allRecords.find(r => r.record_id === recordId);
       if (!rec) return;
@@ -2693,12 +2742,12 @@
         statusBadge.innerText = st.text;
       }
 
-      // Pre-factura Info Badge
+      // Pre-factura Info Badge (solo coteja contra registros confirmados)
       const prefBadge = document.getElementById(`pref-badge-${recordId}`);
       if (prefBadge) {
         const prefClean = String(rec.pref_num || "").trim().toUpperCase();
         if (prefClean) {
-          const matches = allRecords.filter(r => String(r.pref_num || "").trim().toUpperCase() === prefClean);
+          const matches = allRecords.filter(r => isRecordCommitted(r) && String(r.pref_num || "").trim().toUpperCase() === prefClean);
           if (matches.length > 1) {
             let totalPref = 0;
             matches.forEach(m => totalPref += parseMoney(m.pref_val));
@@ -2716,12 +2765,12 @@
         }
       }
 
-      // OC Info Badge
+      // OC Info Badge (solo coteja contra registros confirmados)
       const ocBadge = document.getElementById(`oc-badge-${recordId}`);
       if (ocBadge) {
         const ocClean = String(rec.step2_oc || "").trim().toUpperCase();
         if (ocClean) {
-          const matches = allRecords.filter(r => String(r.step2_oc || "").trim().toUpperCase() === ocClean);
+          const matches = allRecords.filter(r => isRecordCommitted(r) && String(r.step2_oc || "").trim().toUpperCase() === ocClean);
           if (matches.length > 1) {
             let totalFacAgainstOc = 0;
             matches.forEach(m => totalFacAgainstOc += parseMoney(m.fac_val));
@@ -2739,12 +2788,12 @@
         }
       }
 
-      // Invoice Duplicate Warning Badge (NON-BLOCKING)
+      // Invoice Duplicate Warning Badge (NON-BLOCKING, solo coteja contra registros confirmados)
       const facBadge = document.getElementById(`fac-badge-${recordId}`);
       if (facBadge) {
         const facClean = String(rec.step3_fac || "").trim().toUpperCase();
         if (facClean) {
-          const otherMatches = allRecords.filter(r => r.record_id !== rec.record_id && String(r.step3_fac || "").trim().toUpperCase() === facClean);
+          const otherMatches = allRecords.filter(r => isRecordCommitted(r) && r.record_id !== rec.record_id && String(r.step3_fac || "").trim().toUpperCase() === facClean);
           if (otherMatches.length > 0) {
             const om = otherMatches[0];
             const valInfo = om.fac_val ? ` (${om.fac_val})` : '';
@@ -2802,21 +2851,31 @@
       const summaryEl = document.getElementById(`client-summary-${clientId}`);
       if (!summaryEl) return;
 
-      const clientRecs = allRecords.filter(r => r.client_id === clientId);
+      const clientRecs = allRecords.filter(r => r.client_id === clientId && isRecordCommitted(r));
       let totalPref = 0;
       let totalFac = 0;
       let facCount = 0;
+      const seenFac = new Set();
 
       clientRecs.forEach(r => {
         totalPref += parseMoney(r.pref_val);
-        totalFac += parseMoney(r.fac_val);
-        if (r.step3_fac && String(r.step3_fac).trim()) facCount++;
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+        if (facKey) {
+          if (!seenFac.has(facKey)) {
+            seenFac.add(facKey);
+            totalFac += parseMoney(r.fac_val);
+            facCount++;
+          }
+        } else if (parseMoney(r.fac_val) > 0) {
+          totalFac += parseMoney(r.fac_val);
+          facCount++;
+        }
       });
 
-      if (totalPref > 0 || totalFac > 0 || clientRecs.length > 1) {
+      if (totalPref > 0 || totalFac > 0 || clientRecs.length > 0) {
         summaryEl.innerHTML = `
           <div class="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-            <span class="text-[10px] text-slate-400 font-bold uppercase">${clientRecs.length} ${clientRecs.length === 1 ? 'fila' : 'filas'}</span>
+            <span class="text-[10px] text-slate-400 font-bold uppercase">${clientRecs.length} ${clientRecs.length === 1 ? 'partida' : 'partidas'}</span>
             <span class="text-slate-300">•</span>
             <span class="text-sky-700 font-bold">Pref: ${formatMoneyCOP(totalPref)}</span>
             <span class="text-slate-300">•</span>
@@ -3169,27 +3228,6 @@
     }
 
     // ==========================================
-    // HELPER: VERIFY IF A RECORD CONTAINS REAL DATA
-    // ==========================================
-    function isRecordWithData(r) {
-      if (!r) return false;
-      return Boolean(
-        r.step1 ||
-        (r.pref_num && String(r.pref_num).trim() !== "") ||
-        (r.pref_val && parseMoney(r.pref_val) > 0) ||
-        r.step2 ||
-        (r.step2_oc && String(r.step2_oc).trim() !== "") ||
-        r.step3 ||
-        (r.step3_fac && String(r.step3_fac).trim() !== "") ||
-        (r.fac_val && parseMoney(r.fac_val) > 0) ||
-        r.step4 ||
-        (r.fac_pdf_url && String(r.fac_pdf_url).trim() !== "") ||
-        (r.report_doc_url && String(r.report_doc_url).trim() !== "") ||
-        (r.notes && String(r.notes).trim() !== "")
-      );
-    }
-
-    // ==========================================
     // BUILD MODULAR CLIENT CARD DOM ELEMENT
     // ==========================================
     function buildClientCardElement(c) {
@@ -3230,6 +3268,8 @@
           step4: false,
           step4_date: "",
           notes: "",
+          is_committed: 0,
+          linked_pref_nums: "",
           updated_by: "Sistema"
         };
         cRecords = [defRec];
@@ -3239,11 +3279,12 @@
       // Determine active capture record vs committed records
       let activeRecord = cRecords.find(r => r.record_id === `rec_${c.id}_default`);
       if (!activeRecord) {
-        activeRecord = cRecords.find(r => !isRecordWithData(r)) || cRecords[0];
+        activeRecord = cRecords.find(r => !isRecordCommitted(r)) || cRecords[0];
       }
 
-      // Committed records: records other than the clean capture slot that have data
-      const committedRecords = cRecords.filter(r => r.record_id !== activeRecord.record_id && isRecordWithData(r));
+      // Committed records: records strictly saved via Enviar button
+      const committedRecords = cRecords.filter(r => isRecordCommitted(r));
+      const availablePrefs = cRecords.filter(item => isRecordCommitted(item) && (item.pref_num || parseMoney(item.pref_val) > 0));
 
       const card = document.createElement("div");
       card.id = `client-section-${c.id}`;
@@ -3496,6 +3537,49 @@
                     </div>
                     <div id="fac-badge-${r.record_id}"></div>
                     <div id="diff-badge-${r.record_id}"></div>
+                    ${availablePrefs.length > 0 ? `
+                      <div class="mt-2 pt-1.5 border-t border-emerald-200/70">
+                        <button type="button" onclick="togglePrefAssociator('${r.record_id}')" class="w-full text-left flex items-center justify-between text-[10px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50/80 hover:bg-emerald-100/80 px-2 py-1 rounded-lg border border-emerald-200 transition" title="Amparar una o varias prefacturas existentes en esta factura">
+                          <span class="flex items-center gap-1.5">
+                            <i class="fa-solid fa-link text-emerald-600"></i>
+                            <span>Asociar Pre-factura(s) (${availablePrefs.length})</span>
+                          </span>
+                          <i id="chevron-pref-${r.record_id}" class="fa-solid fa-chevron-down text-[9px] text-emerald-600"></i>
+                        </button>
+                        <div id="pref-assoc-box-${r.record_id}" class="hidden mt-1.5 p-2 bg-emerald-50 rounded-xl border border-emerald-200 space-y-1.5 shadow-2xs">
+                          <div class="flex items-center justify-between text-[9px] font-bold text-emerald-950 uppercase tracking-wider">
+                            <span>Pre-facturas disponibles:</span>
+                            <span class="text-emerald-700">Multi-selección</span>
+                          </div>
+                          <div class="space-y-1 max-h-32 overflow-y-auto pr-0.5">
+                            ${availablePrefs.map(ap => {
+                              const pNum = (ap.pref_num || 'S/N').trim();
+                              const pVal = parseMoney(ap.pref_val);
+                              const pGrp = ap.area_group ? `[${ap.area_group}] ` : '';
+                              const isChecked = (r.linked_pref_nums || '').split(',').map(s => s.trim().toUpperCase()).includes(pNum.toUpperCase());
+                              return `
+                                <label class="flex items-center justify-between text-[10px] text-slate-700 cursor-pointer hover:bg-emerald-100/70 p-1 rounded-lg transition">
+                                  <span class="flex items-center gap-1.5 truncate">
+                                    <input type="checkbox" class="pref-assoc-cb-${r.record_id} rounded text-emerald-600 focus:ring-emerald-500" data-num="${pNum}" data-val="${pVal}" ${isChecked ? 'checked' : ''} onchange="onPrefAssocChanged('${r.record_id}')">
+                                    <span class="font-mono font-bold text-slate-800 truncate">${pGrp}${pNum}</span>
+                                  </span>
+                                  <span class="font-mono text-emerald-800 font-bold shrink-0">${formatCurrencyString(pVal)}</span>
+                                </label>
+                              `;
+                            }).join('')}
+                          </div>
+                          <div class="pt-1.5 border-t border-emerald-200 flex items-center justify-between gap-1 text-[10px]">
+                            <div class="font-bold text-emerald-950">
+                              Total: <span id="pref-assoc-sum-val-${r.record_id}" class="font-mono font-extrabold text-emerald-800">$ 0</span>
+                            </div>
+                            <button type="button" onclick="applyPrefAssocTotal('${r.record_id}')" class="px-2 py-0.5 text-[9px] font-extrabold rounded bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition active:scale-95" title="Copiar suma calculada al campo Valor Factura">
+                              Copiar a Valor Fac
+                            </button>
+                          </div>
+                          <input type="hidden" id="linked-prefs-${r.record_id}" value="${r.linked_pref_nums || ''}">
+                        </div>
+                      </div>
+                    ` : `<input type="hidden" id="linked-prefs-${r.record_id}" value="${r.linked_pref_nums || ''}">`}
                   </div>
                 </td>
 
@@ -3601,6 +3685,13 @@
                       <td class="p-2 bg-emerald-50/20 border-r border-emerald-100">
                         <div class="font-bold text-emerald-950 font-mono">${cr.step3_fac || '<span class="text-slate-400 font-normal italic">Sin Factura</span>'}</div>
                         <div class="font-mono text-[11px] font-bold text-emerald-800">${formatCurrencyString(cr.fac_val) || '$ 0'}</div>
+                        ${cr.linked_pref_nums ? `
+                          <div class="mt-0.5">
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 font-mono" title="Pre-facturas amparadas en esta factura">
+                              <i class="fa-solid fa-link text-[8px]"></i> Prefs: ${cr.linked_pref_nums}
+                            </span>
+                          </div>
+                        ` : ''}
                         ${cr.step3_date ? `<div class="text-[10px] text-slate-500 font-mono">${cr.step3_date}</div>` : ''}
                         ${cr.fac_pdf_url ? `
                           <div class="mt-1">
@@ -3646,9 +3737,19 @@
               Panel Consolidado de Registros Guardados (${committedRecords.length})
             </h4>
           </div>
-          <span class="text-[11px] text-slate-500 font-medium italic">Historial de facturación de esta empresa</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-500 font-medium italic hidden sm:inline">Historial de facturación</span>
+            ${committedRecords.length > 0 ? `
+              <button type="button" onclick="toggleClientConsolidatedList(${c.id})" class="px-2 py-0.5 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition flex items-center gap-1">
+                <span id="toggle-list-text-${c.id}">Ocultar</span>
+                <i id="toggle-list-icon-${c.id}" class="fa-solid fa-chevron-up text-[9px]"></i>
+              </button>
+            ` : ''}
+          </div>
         </div>
-        ${tableRowsHtml}
+        <div id="client-consolidated-table-wrap-${c.id}">
+          ${tableRowsHtml}
+        </div>
       `;
       card.appendChild(consolidatedSection);
 
@@ -3693,18 +3794,24 @@
         if (filterResp !== "ALL" && c.resp !== filterResp) return;
 
         const cRecords = allRecords.filter(r => r.client_id === c.id);
+        const committedClientRecs = cRecords.filter(r => isRecordCommitted(r));
+
         if (filterFreq !== "ALL" && !cRecords.some(r => r.freq_type === filterFreq)) {
           if (c.freq_type !== filterFreq && c.freqType !== filterFreq) return;
         }
-        if (filterStatus !== "ALL" && !cRecords.some(r => computeRecordStatus(r).key === filterStatus)) {
-          return;
+        if (filterStatus !== "ALL") {
+          const matchCommitted = committedClientRecs.some(r => computeRecordStatus(r).key === filterStatus);
+          const matchDefault = (committedClientRecs.length === 0 && filterStatus === "PENDIENTE");
+          if (!matchCommitted && !matchDefault) return;
         }
-        if (filterTraffic !== "ALL" && !cRecords.some(r => computeRecordTrafficLight(r).level.toUpperCase() === filterTraffic)) {
-          return;
+        if (filterTraffic !== "ALL") {
+          const matchCommitted = committedClientRecs.some(r => computeRecordTrafficLight(r).level.toUpperCase() === filterTraffic);
+          const matchDefault = (committedClientRecs.length === 0 && filterTraffic === "NORMAL");
+          if (!matchCommitted && !matchDefault) return;
         }
         if (search) {
           const matchClient = c.name.toLowerCase().includes(search) || (c.contact && c.contact.toLowerCase().includes(search)) || (c.obs && c.obs.toLowerCase().includes(search));
-          const matchRecord = cRecords.some(r => 
+          const matchRecord = committedClientRecs.some(r => 
             (r.step3_fac && r.step3_fac.toLowerCase().includes(search)) ||
             (r.pref_num && r.pref_num.toLowerCase().includes(search)) ||
             (r.step2_oc && r.step2_oc.toLowerCase().includes(search)) ||
@@ -3746,6 +3853,8 @@
       const facVal = document.getElementById(`text-fac-val-${recordId}`);
       const step4Check = document.getElementById(`check-step4-${recordId}`);
       const notesEl = document.getElementById(`text-notes-${recordId}`);
+      const linkedPrefInput = document.getElementById(`linked-prefs-${recordId}`);
+      const linkedPrefVal = linkedPrefInput ? linkedPrefInput.value.trim() : (existingRec.linked_pref_nums || "");
 
       const existingRec = allRecords.find(r => r.record_id === recordId) || {};
 
@@ -3773,13 +3882,14 @@
         notes: notesEl ? notesEl.value.trim() : (existingRec.notes || ""),
         fac_pdf_url: existingRec.fac_pdf_url || "",
         report_doc_url: existingRec.report_doc_url || "",
+        linked_pref_nums: linkedPrefVal,
         author: currentUser ? currentUser.name : "Usuario"
       };
 
       const hasData = payload.step1 || payload.pref_num || (payload.pref_val && parseMoney(payload.pref_val) > 0) ||
                       payload.step2 || payload.step2_oc ||
                       payload.step3 || payload.step3_fac || (payload.fac_val && parseMoney(payload.fac_val) > 0) ||
-                      payload.step4 || payload.fac_pdf_url || payload.report_doc_url || payload.notes;
+                      payload.step4 || payload.fac_pdf_url || payload.report_doc_url || payload.notes || payload.linked_pref_nums;
 
       if (!hasData) {
         alert("Por favor diligencie algún dato de la factura o pre-factura antes de enviar al registro.");
@@ -3900,6 +4010,48 @@
       document.getElementById("editRecStep4Date").value = rec.step4_date || "";
       document.getElementById("editRecNotes").value = rec.notes || "";
 
+      // Enfoque Híbrido: Poblar lista de multi-asociación de pre-facturas para el modal
+      const clientCommittedPrefs = allRecords.filter(item => item.client_id === rec.client_id && item.record_id !== rec.record_id && isRecordCommitted(item) && (item.pref_num || parseMoney(item.pref_val) > 0));
+      const editAssocSec = document.getElementById("editModalPrefAssocSection");
+      const editAssocList = document.getElementById("editModalPrefAssocList");
+      const editAssocCount = document.getElementById("editModalPrefAssocCount");
+      const linkedPrefInput = document.getElementById("editRecLinkedPrefNums");
+      
+      if (linkedPrefInput) linkedPrefInput.value = rec.linked_pref_nums || "";
+
+      if (editAssocSec && editAssocList) {
+        if (clientCommittedPrefs.length > 0) {
+          editAssocSec.classList.remove("hidden");
+          if (editAssocCount) editAssocCount.innerText = `${clientCommittedPrefs.length} disponibles`;
+          
+          const currentLinked = (rec.linked_pref_nums || "").split(",").map(s => s.trim().toUpperCase());
+          let sumAssoc = 0;
+
+          editAssocList.innerHTML = clientCommittedPrefs.map(ap => {
+            const apNum = (ap.pref_num || 'S/N').trim();
+            const apVal = parseMoney(ap.pref_val);
+            const isChecked = currentLinked.includes(apNum.toUpperCase());
+            if (isChecked) sumAssoc += apVal;
+            const apGrp = ap.area_group ? `[${ap.area_group}] ` : '';
+
+            return `
+              <label class="flex items-center justify-between text-xs text-slate-700 cursor-pointer hover:bg-emerald-100/70 p-1.5 rounded-lg transition">
+                <span class="flex items-center gap-2 truncate">
+                  <input type="checkbox" class="edit-modal-pref-cb rounded text-emerald-600 focus:ring-emerald-500" data-num="${apNum}" data-val="${apVal}" ${isChecked ? 'checked' : ''} onchange="onEditModalPrefAssocChanged()">
+                  <span class="font-mono font-bold text-slate-800">${apGrp}${apNum}</span>
+                </span>
+                <span class="font-mono font-bold text-emerald-800">${formatCurrencyString(apVal)}</span>
+              </label>
+            `;
+          }).join("");
+
+          const sumValEl = document.getElementById("editModalPrefAssocSumVal");
+          if (sumValEl) sumValEl.innerText = formatMoneyCOP(sumAssoc);
+        } else {
+          editAssocSec.classList.add("hidden");
+        }
+      }
+
       document.getElementById("editRecordModal").classList.remove("hidden");
     }
 
@@ -4008,6 +4160,7 @@
         notes: document.getElementById("editRecNotes").value.trim(),
         fac_pdf_url: document.getElementById("editRecFacPdfUrl").value,
         report_doc_url: document.getElementById("editRecReportDocUrl").value,
+        linked_pref_nums: document.getElementById("editRecLinkedPrefNums") ? document.getElementById("editRecLinkedPrefNums").value.trim() : "",
         author: currentUser ? currentUser.name : "Usuario"
       };
 
@@ -4081,6 +4234,144 @@
     }
 
     // ==========================================
+    // ENFOQUE HÍBRIDO: MULTI-ASOCIACIÓN DE PREFACTURAS HELPERS
+    // ==========================================
+    function togglePrefAssociator(recordId) {
+      const box = document.getElementById(`pref-assoc-box-${recordId}`);
+      const chev = document.getElementById(`chevron-pref-${recordId}`);
+      if (!box) return;
+      const isHidden = box.classList.contains("hidden");
+      if (isHidden) {
+        box.classList.remove("hidden");
+        if (chev) {
+          chev.classList.remove("fa-chevron-down");
+          chev.classList.add("fa-chevron-up");
+        }
+        onPrefAssocChanged(recordId);
+      } else {
+        box.classList.add("hidden");
+        if (chev) {
+          chev.classList.remove("fa-chevron-up");
+          chev.classList.add("fa-chevron-down");
+        }
+      }
+    }
+
+    function onPrefAssocChanged(recordId) {
+      const checkboxes = document.querySelectorAll(`.pref-assoc-cb-${recordId}`);
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const sumEl = document.getElementById(`pref-assoc-sum-val-${recordId}`);
+      if (sumEl) sumEl.innerText = formatMoneyCOP(sumVal);
+
+      const linkedInput = document.getElementById(`linked-prefs-${recordId}`);
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+
+      const rec = allRecords.find(r => r.record_id === recordId);
+      if (rec) {
+        rec.linked_pref_nums = selectedNums.join(", ");
+      }
+    }
+
+    function applyPrefAssocTotal(recordId) {
+      const checkboxes = document.querySelectorAll(`.pref-assoc-cb-${recordId}`);
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const valInput = document.getElementById(`text-fac-val-${recordId}`);
+      if (valInput) {
+        valInput.value = formatCurrencyString(sumVal);
+        onMoneyBlur(valInput, recordId, 'fac_val');
+      }
+
+      const linkedInput = document.getElementById(`linked-prefs-${recordId}`);
+      if (linkedInput) {
+        linkedInput.value = selectedNums.join(", ");
+        updateRecordField(recordId, 'linked_pref_nums', selectedNums.join(", "));
+      }
+
+      showToast(`✓ Suma de ${selectedNums.length} pre-factura(s) (${formatMoneyCOP(sumVal)}) copiada al valor de la factura.`);
+    }
+
+    function toggleClientConsolidatedList(clientId) {
+      const tableWrap = document.getElementById(`client-consolidated-table-wrap-${clientId}`);
+      const icon = document.getElementById(`toggle-list-icon-${clientId}`);
+      const text = document.getElementById(`toggle-list-text-${clientId}`);
+      if (!tableWrap) return;
+      const isHidden = tableWrap.classList.contains("hidden");
+      if (isHidden) {
+        tableWrap.classList.remove("hidden");
+        if (icon) {
+          icon.classList.remove("fa-chevron-down");
+          icon.classList.add("fa-chevron-up");
+        }
+        if (text) text.innerText = "Ocultar";
+      } else {
+        tableWrap.classList.add("hidden");
+        if (icon) {
+          icon.classList.remove("fa-chevron-up");
+          icon.classList.add("fa-chevron-down");
+        }
+        if (text) text.innerText = "Ver listado";
+      }
+    }
+
+    function onEditModalPrefAssocChanged() {
+      const checkboxes = document.querySelectorAll(".edit-modal-pref-cb");
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const sumValEl = document.getElementById("editModalPrefAssocSumVal");
+      if (sumValEl) sumValEl.innerText = formatMoneyCOP(sumVal);
+
+      const linkedInput = document.getElementById("editRecLinkedPrefNums");
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+    }
+
+    function applyEditModalPrefAssocSum() {
+      const checkboxes = document.querySelectorAll(".edit-modal-pref-cb");
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const facValInput = document.getElementById("editRecFacVal");
+      if (facValInput) facValInput.value = formatCurrencyString(sumVal);
+
+      const linkedInput = document.getElementById("editRecLinkedPrefNums");
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+
+      showToast(`✓ Suma de ${selectedNums.length} pre-factura(s) (${formatMoneyCOP(sumVal)}) aplicada al campo Valor Factura.`);
+    }
+
+    // ==========================================
     // RENDER PRE-FACTURAS TRACKING TABLE (READ ONLY + EDIT MODAL)
     // ==========================================
     function renderPrefacturasTable() {
@@ -4101,6 +4392,7 @@
       const filterMode = filterSelect ? filterSelect.value : "all";
 
       const prefRows = allRecords.filter(r => {
+        if (!isRecordCommitted(r)) return false;
         const c = clientMap[r.client_id] || { name: r.client_name };
         const pVal = parseMoney(r.pref_val);
         const hasPrefNum = Boolean(r.pref_num && String(r.pref_num).trim());
@@ -4231,9 +4523,9 @@
       const searchInput = document.getElementById("facSearchInput");
       const searchQ = searchInput ? searchInput.value.toLowerCase().trim() : "";
       const filterSelect = document.getElementById("facFilterSelect");
-      const filterMode = filterSelect ? filterSelect.value : "invoiced";
-
+      const seenFacNumbers = new Set();
       const facRows = allRecords.filter(r => {
+        if (!isRecordCommitted(r)) return false;
         const c = clientMap[r.client_id] || { name: r.client_name };
         const hasFac = (r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && String(r.fac_val).trim()) || r.step3;
 
@@ -4255,10 +4547,17 @@
         const c = clientMap[r.client_id] || { name: r.client_name, resp: 'Edwar' };
         const fVal = parseMoney(r.fac_val);
         const tl = computeRecordTrafficLight(r);
-        if (fVal > 0) {
-          totalFacVal += fVal;
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+
+        if (facKey) {
+          if (!seenFacNumbers.has(facKey)) {
+            seenFacNumbers.add(facKey);
+            if (fVal > 0) totalFacVal += fVal;
+            countFac++;
+          }
+        } else {
+          if (fVal > 0) totalFacVal += fVal;
         }
-        if (r.step3_fac && String(r.step3_fac).trim()) countFac++;
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-emerald-50/30 border-b border-slate-100 transition";
@@ -4279,7 +4578,16 @@
           </td>
           <td class="p-2.5 text-slate-600 font-medium">${r.month} - ${r.period_detail}</td>
           <td class="p-2.5 text-center text-slate-600 font-mono text-[11px]">${r.step3_date || '-'}</td>
-          <td class="p-2.5 bg-emerald-50/50 font-bold text-emerald-950 font-mono">${r.step3_fac || '<span class="text-slate-400 font-normal italic">Sin número</span>'}</td>
+          <td class="p-2.5 bg-emerald-50/50 font-bold text-emerald-950 font-mono">
+            <div>${r.step3_fac || '<span class="text-slate-400 font-normal italic">Sin número</span>'}</div>
+            ${r.linked_pref_nums ? `
+              <div class="mt-0.5">
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 font-mono" title="Pre-facturas amparadas en esta factura">
+                  <i class="fa-solid fa-link text-[8px]"></i> Prefs: ${r.linked_pref_nums}
+                </span>
+              </div>
+            ` : ''}
+          </td>
           <td class="p-2.5 bg-emerald-50/50 font-mono font-bold text-emerald-950 text-right">${formatCurrencyString(r.fac_val) || '$ 0'}</td>
           <td class="p-2.5 bg-amber-50/40">
             ${r.step2_oc ? `
@@ -4345,14 +4653,25 @@
 
       let totalMatrixVal = 0;
       let countMatrixFac = 0;
+      const seenMatrixFac = new Set();
 
-      const invoicesList = allRecords.filter(r => (r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && parseMoney(r.fac_val) > 0));
+      const invoicesList = allRecords.filter(r => isRecordCommitted(r) && ((r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && parseMoney(r.fac_val) > 0)));
 
       invoicesList.forEach((r, idx) => {
         const c = clientMap[r.client_id] || { name: r.client_name, resp: 'Edwar' };
         const fVal = parseMoney(r.fac_val);
-        totalMatrixVal += fVal;
-        countMatrixFac++;
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+
+        if (facKey) {
+          if (!seenMatrixFac.has(facKey)) {
+            seenMatrixFac.add(facKey);
+            totalMatrixVal += fVal;
+            countMatrixFac++;
+          }
+        } else {
+          totalMatrixVal += fVal;
+          countMatrixFac++;
+        }
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-purple-50/20 border-b border-slate-100 transition";
@@ -4453,8 +4772,8 @@
         const qColsHtml = MATRIX_COLS.map(col => {
           countsByCol[col.key].total++;
 
-          // Auto-reflect ALL matching records for this client, month and quarter
-          const matchingRecords = allRecords.filter(r => r.client_id === c.id && r.month === col.month && (r.period_detail.includes(col.period) || r.period_detail === 'Mes Completo'));
+          // Auto-reflect ALL matching records for this client, month and quarter (solo confirmados)
+          const matchingRecords = allRecords.filter(r => isRecordCommitted(r) && r.client_id === c.id && r.month === col.month && (r.period_detail.includes(col.period) || r.period_detail === 'Mes Completo'));
           
           let cell = (matrixData[c.id] && matrixData[c.id][col.key]) ? matrixData[c.id][col.key] : null;
           let currentStatus = cell ? cell.status : "PENDIENTE";
@@ -5252,19 +5571,30 @@
 
     function updateKPIs() {
       let done = 0, waiting = 0, totalPref = 0, totalFac = 0;
-      allRecords.forEach(r => {
+      const seenFac = new Set();
+      const committedRecs = allRecords.filter(r => isRecordCommitted(r));
+
+      committedRecs.forEach(r => {
         const st = computeRecordStatus(r);
         if (st.key === "COMPLETADO") done++;
         else if (st.key === "WAITING") waiting++;
         totalPref += parseMoney(r.pref_val);
-        totalFac += parseMoney(r.fac_val);
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+        if (facKey) {
+          if (!seenFac.has(facKey)) {
+            seenFac.add(facKey);
+            totalFac += parseMoney(r.fac_val);
+          }
+        } else if (parseMoney(r.fac_val) > 0) {
+          totalFac += parseMoney(r.fac_val);
+        }
       });
 
       const clientList = allClients.length > 0 ? allClients : CLIENTS_MASTER;
       const kpiClients = document.getElementById("kpiTotalClients");
       if (kpiClients) kpiClients.innerText = clientList.length;
       const kpiRecs = document.getElementById("kpiTotalRecords");
-      if (kpiRecs) kpiRecs.innerText = allRecords.length;
+      if (kpiRecs) kpiRecs.innerText = committedRecs.length;
       const checkTitle = document.getElementById("tabNavChecklistTitle");
       if (checkTitle) checkTitle.innerText = `Checklist Global (${clientList.length})`;
 
