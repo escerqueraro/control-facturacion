@@ -191,7 +191,16 @@ def init_db():
     add_col_if_missing("billing_records", "area_group", "TEXT DEFAULT ''")
     add_col_if_missing("billing_records", "fac_pdf_url", "TEXT DEFAULT ''")
     add_col_if_missing("billing_records", "report_doc_url", "TEXT DEFAULT ''")
+    add_col_if_missing("billing_records", "linked_pref_nums", "TEXT DEFAULT ''")
+    add_col_if_missing("billing_records", "is_committed", "INTEGER DEFAULT 0")
     add_col_if_missing("system_users", "permissions", "TEXT DEFAULT 'total'")
+
+    try:
+        cursor.execute("UPDATE billing_records SET is_committed = 0 WHERE record_id LIKE '%_default' AND (pref_val = '' OR pref_val IS NULL OR pref_val = '$ 0') AND (step3_fac = '' OR step3_fac IS NULL) AND (fac_val = '' OR fac_val IS NULL OR fac_val = '$ 0')")
+        cursor.execute("UPDATE billing_records SET is_committed = 1 WHERE record_id NOT LIKE '%_default' OR (pref_val != '' AND pref_val != '$ 0' AND pref_val IS NOT NULL) OR (step3_fac != '' AND step3_fac IS NOT NULL) OR (fac_val != '' AND fac_val != '$ 0' AND fac_val IS NOT NULL)")
+        conn.commit()
+    except Exception:
+        pass
 
     # 6. File Archive Table (Persistent file storage across container restarts)
     cursor.execute("""
@@ -1029,7 +1038,8 @@ async def update_record_field(req: UpdateRecordFieldRequest):
         "step2", "step2_oc", "step2_date", "oc_val",
         "step3", "step3_fac", "step3_date", "fac_val",
         "step4", "step4_date", "notes",
-        "area_group", "fac_pdf_url", "report_doc_url"
+        "area_group", "fac_pdf_url", "report_doc_url",
+        "linked_pref_nums", "is_committed"
     ]
     if req.field not in allowed_fields:
         raise HTTPException(status_code=400, detail="Campo no permitido")
@@ -1089,6 +1099,7 @@ class CommitAndResetRequest(BaseModel):
     notes: Optional[str] = None
     fac_pdf_url: Optional[str] = None
     report_doc_url: Optional[str] = None
+    linked_pref_nums: Optional[str] = ""
 
 @app.post("/api/records/commit_and_reset")
 async def commit_and_reset_record(req: CommitAndResetRequest):
@@ -1109,7 +1120,7 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
         "step2", "step2_oc", "step2_date", "oc_val",
         "step3", "step3_fac", "step3_date", "fac_val",
         "step4", "step4_date", "notes",
-        "fac_pdf_url", "report_doc_url"
+        "fac_pdf_url", "report_doc_url", "linked_pref_nums"
     ]:
         val = getattr(req, field_name, None)
         if val is not None:
@@ -1120,14 +1131,14 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
     # Generate unique ID for this committed record
     new_record_id = f"rec_{req.client_id}_{uuid.uuid4().hex[:8]}"
 
-    # Insert permanent consolidated record
+    # Insert permanent consolidated record with is_committed = 1
     cursor.execute("""
     INSERT INTO billing_records
     (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group,
      step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val,
      step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date,
-     notes, updated_by, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+     notes, linked_pref_nums, is_committed, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
     """, (
         new_record_id, current_data["client_id"], current_data["client_name"],
         current_data["freq_type"], current_data["month"], current_data["period_detail"], current_data["period_key"],
@@ -1137,17 +1148,17 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
         bool(current_data["step3"]), current_data["step3_fac"], current_data["step3_date"], current_data["fac_val"],
         current_data.get("fac_pdf_url", ""), current_data.get("report_doc_url", ""),
         bool(current_data["step4"]), current_data["step4_date"],
-        current_data["notes"], req.author, now_iso
+        current_data["notes"], current_data.get("linked_pref_nums", ""), req.author, now_iso
     ))
 
-    # Reset the active input record (req.record_id) to empty/clean state!
+    # Reset the active input record (req.record_id) to empty/clean state and is_committed = 0!
     cursor.execute("""
     UPDATE billing_records
     SET step1 = FALSE, step1_date = '', pref_num = '', pref_val = '',
         step2 = FALSE, step2_oc = '', step2_date = '', oc_val = '',
         step3 = FALSE, step3_fac = '', step3_date = '', fac_val = '',
         fac_pdf_url = '', report_doc_url = '',
-        step4 = FALSE, step4_date = '', notes = '',
+        step4 = FALSE, step4_date = '', notes = '', linked_pref_nums = '', is_committed = 0,
         updated_by = ?, updated_at = ?
     WHERE record_id = ?
     """, (req.author, now_iso, req.record_id))
@@ -1177,6 +1188,83 @@ async def commit_and_reset_record(req: CommitAndResetRequest):
         "clean_record": clean_row
     }
 
+class CreateCommittedRecordRequest(BaseModel):
+    client_id: int
+    freq_type: Optional[str] = "Quincenal"
+    month: Optional[str] = "Octubre"
+    period_detail: Optional[str] = "1Q (1-15)"
+    area_group: Optional[str] = ""
+    step1: Optional[bool] = False
+    step1_date: Optional[str] = ""
+    pref_num: Optional[str] = ""
+    pref_val: Optional[str] = ""
+    step2: Optional[bool] = False
+    step2_oc: Optional[str] = ""
+    step2_date: Optional[str] = ""
+    oc_val: Optional[str] = ""
+    step3: Optional[bool] = False
+    step3_fac: Optional[str] = ""
+    step3_date: Optional[str] = ""
+    fac_val: Optional[str] = ""
+    fac_pdf_url: Optional[str] = ""
+    report_doc_url: Optional[str] = ""
+    step4: Optional[bool] = False
+    step4_date: Optional[str] = ""
+    notes: Optional[str] = ""
+    linked_pref_nums: Optional[str] = ""
+    author: Optional[str] = "Sistema"
+
+@app.post("/api/records/create_committed")
+async def create_committed_record(req: CreateCommittedRecordRequest):
+    conn = get_db_connection()
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    cursor.execute("SELECT * FROM clients WHERE id = ?", (req.client_id,))
+    c_row = cursor.fetchone()
+    if not c_row:
+        conn.close()
+        raise HTTPException(status_code=404, detail="Cliente no encontrado")
+
+    c_meta = dict(c_row)
+    new_record_id = f"rec_{req.client_id}_{uuid.uuid4().hex[:8]}"
+    now_iso = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
+    cursor.execute("""
+    INSERT INTO billing_records
+    (record_id, client_id, client_name, freq_type, month, period_detail, period_key, area_group,
+     step1, step1_date, pref_num, pref_val, step2, step2_oc, step2_date, oc_val,
+     step3, step3_fac, step3_date, fac_val, fac_pdf_url, report_doc_url, step4, step4_date,
+     notes, linked_pref_nums, is_committed, updated_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, 'CUSTOM', ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
+    """, (
+        new_record_id, req.client_id, c_meta["name"],
+        req.freq_type or "Quincenal", req.month or "Octubre", req.period_detail or "1Q (1-15)",
+        req.area_group or "",
+        bool(req.step1), req.step1_date or "", req.pref_num or "", req.pref_val or "",
+        bool(req.step2), req.step2_oc or "", req.step2_date or "", req.oc_val or "",
+        bool(req.step3), req.step3_fac or "", req.step3_date or "", req.fac_val or "",
+        req.fac_pdf_url or "", req.report_doc_url or "",
+        bool(req.step4), req.step4_date or "",
+        req.notes or "", req.linked_pref_nums or "",
+        req.author or "Sistema", now_iso
+    ))
+    conn.commit()
+
+    cursor.execute("SELECT * FROM billing_records WHERE record_id = ?", (new_record_id,))
+    committed_row = dict(cursor.fetchone())
+    conn.close()
+
+    broadcast_data = {
+        "type": "RECORD_COMMITTED",
+        "client_id": req.client_id,
+        "record": committed_row,
+        "author": req.author
+    }
+    await manager.broadcast(broadcast_data)
+
+    return {"success": True, "record": committed_row}
+
 class UpdateFullRecordRequest(BaseModel):
     record_id: str
     freq_type: Optional[str] = "Mensual"
@@ -1200,6 +1288,7 @@ class UpdateFullRecordRequest(BaseModel):
     notes: Optional[str] = ""
     fac_pdf_url: Optional[str] = ""
     report_doc_url: Optional[str] = ""
+    linked_pref_nums: Optional[str] = ""
     updated_by: Optional[str] = "Sistema"
 
 @app.post("/api/records/update_full")
@@ -1216,7 +1305,7 @@ async def update_record_full(req: UpdateFullRecordRequest):
         step2 = ?, step2_oc = ?, step2_date = ?, oc_val = ?,
         step3 = ?, step3_fac = ?, step3_date = ?, fac_val = ?,
         step4 = ?, step4_date = ?, notes = ?,
-        fac_pdf_url = ?, report_doc_url = ?,
+        fac_pdf_url = ?, report_doc_url = ?, linked_pref_nums = ?, is_committed = 1,
         updated_by = ?, updated_at = ?
     WHERE record_id = ?
     """, (
@@ -1225,7 +1314,7 @@ async def update_record_full(req: UpdateFullRecordRequest):
         bool(req.step2), req.step2_oc, req.step2_date, req.oc_val,
         bool(req.step3), req.step3_fac, req.step3_date, req.fac_val,
         bool(req.step4), req.step4_date, req.notes,
-        req.fac_pdf_url, req.report_doc_url,
+        req.fac_pdf_url, req.report_doc_url, req.linked_pref_nums or "",
         req.updated_by, now_iso, req.record_id
     ))
     conn.commit()
@@ -1845,6 +1934,7 @@ def get_monthly_closing_report(month: Optional[str] = "Octubre"):
         except Exception:
             return None
 
+    seen_fac_nums = set()
     for r in records:
         cid = r["client_id"]
         c_meta = clients.get(cid, {})
@@ -1852,10 +1942,25 @@ def get_monthly_closing_report(month: Optional[str] = "Octubre"):
         req_oc = bool(c_meta.get("req_oc", 1))
         req_inf = bool(c_meta.get("req_inf", 1))
 
-        p_val = parse_money(r["pref_val"])
-        f_val = parse_money(r["fac_val"])
+        # Check if record is a draft in active capture panel
+        is_comm = r.get("is_committed") if hasattr(r, "get") else None
+        if is_comm is None:
+            is_comm = not str(r["record_id"]).endswith("_default")
+        
+        is_draft_slot = (not is_comm and str(r["record_id"]).endswith("_default"))
+
+        p_val = parse_money(r["pref_val"]) if not is_draft_slot else 0.0
+        f_val = parse_money(r["fac_val"]) if not is_draft_slot else 0.0
+        fac_num = str(r["step3_fac"] or "").strip().upper()
+
         pref_total += p_val
-        fac_total += f_val
+        if f_val > 0:
+            if fac_num:
+                if fac_num not in seen_fac_nums:
+                    seen_fac_nums.add(fac_num)
+                    fac_total += f_val
+            else:
+                fac_total += f_val
 
         if resp not in by_resp:
             by_resp[resp] = {

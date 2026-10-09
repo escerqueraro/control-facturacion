@@ -456,6 +456,11 @@
                 <span>Portal GOW</span>
               </a>
 
+              <button type="button" onclick="openAddPrefModal()" class="px-3 py-1 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-2xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer" title="Añadir una nueva Pre-factura / Informe">
+                <i class="fa-solid fa-file-circle-plus"></i>
+                <span>+ Nueva Pre-factura</span>
+              </button>
+
               <div class="px-3 py-1 bg-sky-50 text-sky-900 border border-sky-200 rounded-xl font-bold">
                 Total Prefacturas: <span id="prefKpiCount" class="text-sky-700">0</span>
               </div>
@@ -513,6 +518,11 @@
                 <option value="invoiced" selected>Solo Facturadas</option>
                 <option value="pending">Pendientes de Facturar</option>
               </select>
+
+              <button type="button" onclick="openAddFacModal()" class="px-3 py-1 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer" title="Añadir una nueva Factura">
+                <i class="fa-solid fa-receipt"></i>
+                <span>+ Nueva Factura</span>
+              </button>
 
               <div class="px-3 py-1 bg-emerald-50 text-emerald-900 border border-emerald-200 rounded-xl font-bold">
                 Facturas Emitidas: <span id="facKpiCount" class="text-emerald-700">0</span>
@@ -1397,6 +1407,24 @@
               <input type="text" id="editRecFacVal" placeholder="$ 0" oninput="formatMoneyInputDirect(this)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-emerald-950 focus:ring-1 focus:ring-emerald-500">
             </div>
           </div>
+          <!-- Componente Enfoque Híbrido: Multi-asociación de prefacturas en Modal -->
+          <div id="editModalPrefAssocSection" class="hidden pt-2 border-t border-emerald-200/80">
+            <div class="flex items-center justify-between mb-1.5">
+              <span class="font-bold text-[11px] text-emerald-900 flex items-center gap-1.5">
+                <i class="fa-solid fa-link text-emerald-600"></i>
+                <span>Asociar Pre-factura(s) amparadas por esta Factura</span>
+              </span>
+              <span id="editModalPrefAssocCount" class="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-1.5 py-0.2 rounded"></span>
+            </div>
+            <div id="editModalPrefAssocList" class="p-2 bg-white rounded-xl border border-emerald-200 max-h-32 overflow-y-auto space-y-1"></div>
+            <div class="flex items-center justify-between mt-1.5 pt-1.5 border-t border-emerald-200 text-xs font-bold text-emerald-950">
+              <div>Suma seleccionada: <span id="editModalPrefAssocSumVal" class="font-mono text-emerald-800">$ 0</span></div>
+              <button type="button" onclick="applyEditModalPrefAssocSum()" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs transition active:scale-95">
+                Copiar a Valor Factura
+              </button>
+            </div>
+            <input type="hidden" id="editRecLinkedPrefNums" value="">
+          </div>
           <!-- Archivo Factura PDF -->
           <div class="pt-1" id="editRecFacPdfContainer">
             <div ondragover="handleModalDragOver(event, 'fac_pdf')" ondragleave="handleModalDragLeave(event, 'fac_pdf')" ondrop="handleModalDrop(event, 'fac_pdf')"
@@ -1461,6 +1489,312 @@
           </div>
         </div>
 
+      </form>
+  <!-- ======================================================== -->
+  <!-- MODAL: AÑADIR NUEVA PRE-FACTURA / INFORME               -->
+  <!-- ======================================================== -->
+  <div id="addPrefacturaModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 md:p-4 hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-xl w-full p-5 md:p-6 border border-slate-200 transform transition-all text-slate-800 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-3.5 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-sky-100 text-sky-700 flex items-center justify-center text-sm font-bold shadow-2xs">
+            <i class="fa-solid fa-file-circle-plus"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900">Añadir Nueva Pre-factura / Informe</h3>
+            <p class="text-[11px] text-slate-500 font-medium">Registre una prefactura para un cliente o grupo operativo</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAddPrefModal()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="addPrefacturaForm" onsubmit="submitAddPrefactura(event)" class="space-y-3.5 text-xs overflow-y-auto pr-1 flex-1">
+        <!-- Empresa & Grupo Operativo -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Empresa / Cliente: <span class="text-rose-500">*</span></label>
+            <select id="addPrefClientId" required onchange="onAddPrefClientChanged(this.value)" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs focus:ring-1 focus:ring-sky-500">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Grupo Operativo (si aplica):</label>
+            <select id="addPrefAreaGroup" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-indigo-900 focus:ring-1 focus:ring-indigo-500">
+              <option value="">-- General / Sin Grupo --</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Frecuencia, Mes & Período -->
+        <div class="grid grid-cols-3 gap-2.5 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Frecuencia:</label>
+            <select id="addPrefFreq" onchange="onAddPrefFreqChanged(this.value)" class="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="Quincenal" selected>Quincenal</option>
+              <option value="Mensual">Mensual</option>
+              <option value="Semanal">Semanal</option>
+              <option value="Por Evento">Por Evento</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Mes:</label>
+            <select id="addPrefMonth" class="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="Octubre" selected>Octubre</option>
+              <option value="Noviembre">Noviembre</option>
+              <option value="Diciembre">Diciembre</option>
+              <option value="Septiembre">Septiembre</option>
+              <option value="Agosto">Agosto</option>
+              <option value="Julio">Julio</option>
+              <option value="Junio">Junio</option>
+              <option value="Mayo">Mayo</option>
+              <option value="Abril">Abril</option>
+              <option value="Marzo">Marzo</option>
+              <option value="Febrero">Febrero</option>
+              <option value="Enero">Enero</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Corte / Período:</label>
+            <select id="addPrefPeriodDetail" class="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="1Q (1-15)">1Q (1-15)</option>
+              <option value="2Q (16-30)">2Q (16-30)</option>
+              <option value="Mes Completo">Mes Completo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Pre-factura & Informe -->
+        <div class="p-3 bg-sky-50/70 rounded-2xl border border-sky-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-sky-950 text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-file-invoice text-sky-600"></i>
+              <span>Datos de la Pre-factura / Informe</span>
+            </span>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-sky-800">
+              <input type="checkbox" id="addPrefStep1Check" checked class="w-3.5 h-3.5 rounded text-sky-600 focus:ring-sky-500">
+              <span>Informe / Pre-fac Generado</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha del Informe:</label>
+              <input type="date" id="addPrefDate" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-sky-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Nº Pre-factura: <span class="text-rose-500">*</span></label>
+              <input type="text" id="addPrefNum" required placeholder="Ej: 10001" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs text-sky-950 focus:ring-1 focus:ring-sky-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Valor Pre-factura ($): <span class="text-rose-500">*</span></label>
+              <input type="text" id="addPrefVal" required placeholder="$ 0" oninput="formatMoneyInputDirect(this)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-sky-950 focus:ring-1 focus:ring-sky-500">
+            </div>
+          </div>
+          <!-- Adjuntar Informe Excel -->
+          <div>
+            <label class="block font-medium text-slate-600 mb-1 text-[11px]">Adjuntar Informe (Excel .xlsx / .xls / .csv):</label>
+            <input type="file" id="addPrefReportFileInput" accept=".xlsx,.xls,.csv,.docx,.doc" class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-sky-100 file:text-sky-800 hover:file:bg-sky-200 cursor-pointer">
+          </div>
+        </div>
+
+        <!-- Notas -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1 text-[11px]">Notas u Observaciones:</label>
+          <textarea id="addPrefNotes" rows="2" placeholder="Observaciones sobre esta prefactura o informe..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-1 focus:ring-sky-500 resize-none"></textarea>
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
+          <button type="button" onclick="closeAddPrefModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">Cancelar</button>
+          <button type="submit" id="saveAddPrefBtn" class="px-4 py-2 text-xs font-bold rounded-xl bg-sky-600 hover:bg-sky-700 text-white shadow-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Guardar Pre-factura</span>
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ======================================================== -->
+  <!-- MODAL: AÑADIR NUEVA FACTURA & ASOCIAR PRE-FACTURAS     -->
+  <!-- ======================================================== -->
+  <div id="addFacturaModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-3 md:p-4 hidden">
+    <div class="bg-white rounded-3xl shadow-2xl max-w-2xl w-full p-5 md:p-6 border border-slate-200 transform transition-all text-slate-800 max-h-[92vh] flex flex-col">
+      <div class="flex items-center justify-between pb-3.5 border-b border-slate-100 mb-3.5 shrink-0">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center text-sm font-bold shadow-2xs">
+            <i class="fa-solid fa-receipt"></i>
+          </div>
+          <div>
+            <h3 class="text-base font-extrabold text-slate-900">Añadir Nueva Factura & Órdenes</h3>
+            <p class="text-[11px] text-slate-500 font-medium">Registre la factura física/electrónica y seleccione las pre-facturas que ampara</p>
+          </div>
+        </div>
+        <button type="button" onclick="closeAddFacModal()" class="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition cursor-pointer">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <form id="addFacturaForm" onsubmit="submitAddFactura(event)" class="space-y-3.5 text-xs overflow-y-auto pr-1 flex-1">
+        <!-- Empresa & Grupo Operativo -->
+        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Empresa / Cliente: <span class="text-rose-500">*</span></label>
+            <select id="addFacClientId" required onchange="onAddFacClientChanged(this.value)" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-xs focus:ring-1 focus:ring-emerald-500">
+              <!-- Populated dynamically -->
+            </select>
+          </div>
+          <div>
+            <label class="block font-bold text-slate-700 mb-1">Grupo Operativo (si aplica):</label>
+            <select id="addFacAreaGroup" class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl font-bold text-indigo-900 focus:ring-1 focus:ring-indigo-500">
+              <option value="">-- General / Sin Grupo --</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Frecuencia, Mes & Período -->
+        <div class="grid grid-cols-3 gap-2.5 bg-slate-50/80 p-2.5 rounded-xl border border-slate-200">
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Frecuencia:</label>
+            <select id="addFacFreq" onchange="onAddFacFreqChanged(this.value)" class="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="Quincenal" selected>Quincenal</option>
+              <option value="Mensual">Mensual</option>
+              <option value="Semanal">Semanal</option>
+              <option value="Por Evento">Por Evento</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Mes:</label>
+            <select id="addFacMonth" class="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="Octubre" selected>Octubre</option>
+              <option value="Noviembre">Noviembre</option>
+              <option value="Diciembre">Diciembre</option>
+              <option value="Septiembre">Septiembre</option>
+              <option value="Agosto">Agosto</option>
+              <option value="Julio">Julio</option>
+              <option value="Junio">Junio</option>
+              <option value="Mayo">Mayo</option>
+              <option value="Abril">Abril</option>
+              <option value="Marzo">Marzo</option>
+              <option value="Febrero">Febrero</option>
+              <option value="Enero">Enero</option>
+            </select>
+          </div>
+          <div>
+            <label class="block font-semibold text-slate-600 mb-1 text-[11px]">Corte / Período:</label>
+            <select id="addFacPeriodDetail" class="w-full p-1.5 bg-white border border-slate-200 rounded-lg text-xs font-semibold">
+              <option value="1Q (1-15)">1Q (1-15)</option>
+              <option value="2Q (16-30)">2Q (16-30)</option>
+              <option value="Mes Completo">Mes Completo</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- SECCIÓN DE ASOCIACIÓN DE PRE-FACTURAS (SELECTOR DE PRE-FACTURAS) -->
+        <div class="p-3 bg-emerald-50/80 rounded-2xl border border-emerald-300 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-emerald-950 text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-link text-emerald-600"></i>
+              <span>Seleccionar Pre-factura(s) amparadas por esta Factura</span>
+            </span>
+            <span id="addFacPrefCountBadge" class="text-[10px] text-emerald-800 font-bold bg-emerald-200/70 px-2 py-0.5 rounded-full">0 disponibles</span>
+          </div>
+          <div id="addFacPrefList" class="p-2.5 bg-white rounded-xl border border-emerald-200 max-h-36 overflow-y-auto space-y-1">
+            <!-- Dynamic checkboxes injected here -->
+          </div>
+          <div class="flex items-center justify-between pt-1.5 border-t border-emerald-200 text-xs font-bold text-emerald-950">
+            <div>Total Pre-facturas: <span id="addFacPrefSumVal" class="font-mono text-emerald-800 font-extrabold">$ 0</span></div>
+            <button type="button" onclick="applyAddFacPrefSumToFacVal()" class="px-2.5 py-1 text-[11px] font-extrabold rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 shadow-2xs transition active:scale-95 cursor-pointer">
+              Copiar a Valor Factura
+            </button>
+          </div>
+          <input type="hidden" id="addFacLinkedPrefNums" value="">
+        </div>
+
+        <!-- Datos de la Factura -->
+        <div class="p-3 bg-slate-50/90 rounded-2xl border border-slate-200 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-slate-800 text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-file-invoice-dollar text-emerald-600"></i>
+              <span>Datos de la Factura Generada</span>
+            </span>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-emerald-800">
+              <input type="checkbox" id="addFacStep3Check" checked class="w-3.5 h-3.5 rounded text-emerald-600 focus:ring-emerald-500">
+              <span>Factura Generada</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha Generación Factura:</label>
+              <input type="date" id="addFacDate" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Nº Factura: <span class="text-rose-500">*</span></label>
+              <input type="text" id="addFacNum" required placeholder="Ej: FAC-8520" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs text-emerald-950 focus:ring-1 focus:ring-emerald-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Valor Factura ($): <span class="text-rose-500">*</span></label>
+              <input type="text" id="addFacVal" required placeholder="$ 0" oninput="formatMoneyInputDirect(this)" class="w-full p-2 bg-white border border-slate-200 rounded-xl font-black text-xs text-emerald-950 focus:ring-1 focus:ring-emerald-500">
+            </div>
+          </div>
+          <!-- Adjunto PDF Factura -->
+          <div>
+            <label class="block font-medium text-slate-600 mb-1 text-[11px]">Adjuntar Factura PDF:</label>
+            <input type="file" id="addFacPdfFileInput" accept=".pdf,image/*" class="w-full text-xs text-slate-600 file:mr-2 file:py-1 file:px-2.5 file:rounded-lg file:border-0 file:text-xs file:font-bold file:bg-emerald-100 file:text-emerald-800 hover:file:bg-emerald-200 cursor-pointer">
+          </div>
+        </div>
+
+        <!-- Orden de Compra (OC / HES) -->
+        <div class="p-3 bg-amber-50/60 rounded-2xl border border-amber-200 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-bold text-amber-900 text-xs flex items-center gap-1.5">
+              <i class="fa-solid fa-file-contract text-amber-600"></i>
+              <span>Orden de Compra / Aprobación (OC / HES)</span>
+            </span>
+            <label class="inline-flex items-center gap-1.5 cursor-pointer text-[11px] font-bold text-amber-800">
+              <input type="checkbox" id="addFacStep2Check" class="w-3.5 h-3.5 rounded text-amber-600 focus:ring-amber-500">
+              <span>OC Aprobada</span>
+            </label>
+          </div>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Nº Orden de Compra / HES:</label>
+              <input type="text" id="addFacOc" placeholder="Nº OC..." class="w-full p-2 bg-white border border-slate-200 rounded-xl font-bold text-xs focus:ring-1 focus:ring-amber-500">
+            </div>
+            <div>
+              <label class="block font-medium text-slate-600 mb-1 text-[11px]">Fecha OC / Aprobación:</label>
+              <input type="date" id="addFacOcDate" class="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs focus:ring-1 focus:ring-amber-500">
+            </div>
+          </div>
+        </div>
+
+        <!-- Radicado / Envío -->
+        <div class="p-2.5 bg-purple-50/60 rounded-xl border border-purple-200 flex items-center justify-between">
+          <label class="inline-flex items-center gap-2 cursor-pointer font-bold text-purple-900 text-xs">
+            <input type="checkbox" id="addFacStep4Check" class="w-4 h-4 rounded text-purple-600 focus:ring-purple-500">
+            <span>Paso 4: Radicado / Enviado al Cliente</span>
+          </label>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-purple-700 font-semibold">Fecha Envío:</span>
+            <input type="date" id="addFacStep4Date" class="p-1 bg-white border border-slate-200 rounded-lg text-xs">
+          </div>
+        </div>
+
+        <!-- Notas -->
+        <div>
+          <label class="block font-semibold text-slate-700 mb-1 text-[11px]">Notas u Observaciones:</label>
+          <textarea id="addFacNotes" rows="2" placeholder="Observaciones sobre esta factura..." class="w-full p-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:ring-1 focus:ring-emerald-500 resize-none"></textarea>
+        </div>
+
+        <!-- Footer -->
+        <div class="pt-3 border-t border-slate-200 flex items-center justify-end gap-2 shrink-0">
+          <button type="button" onclick="closeAddFacModal()" class="px-3.5 py-2 text-xs font-semibold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition cursor-pointer">Cancelar</button>
+          <button type="submit" id="saveAddFacBtn" class="px-4 py-2 text-xs font-bold rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer">
+            <i class="fa-solid fa-cloud-arrow-up"></i>
+            <span>Guardar Factura</span>
+          </button>
+        </div>
       </form>
     </div>
   </div>
@@ -2682,6 +3016,44 @@
       }
     }
 
+    // ==========================================
+    // RECORD VALIDATION & COMMITMENT HELPERS
+    // ==========================================
+    function isRecordWithData(r) {
+      if (!r) return false;
+      return Boolean(
+        r.step1 ||
+        (r.pref_num && String(r.pref_num).trim() !== "") ||
+        (r.pref_val && parseMoney(r.pref_val) > 0) ||
+        r.step2 ||
+        (r.step2_oc && String(r.step2_oc).trim() !== "") ||
+        r.step3 ||
+        (r.step3_fac && String(r.step3_fac).trim() !== "") ||
+        (r.fac_val && parseMoney(r.fac_val) > 0) ||
+        r.step4 ||
+        (r.fac_pdf_url && String(r.fac_pdf_url).trim() !== "") ||
+        (r.report_doc_url && String(r.report_doc_url).trim() !== "") ||
+        (r.notes && String(r.notes).trim() !== "")
+      );
+    }
+
+    function isRecordCommitted(r) {
+      if (!r || !r.record_id) return false;
+      // Si explícitamente está confirmado en base de datos
+      if (r.is_committed === 1 || r.is_committed === true) {
+        return isRecordWithData(r);
+      }
+      // Si explícitamente es un borrador no enviado / slot de captura
+      if (r.is_committed === 0 || r.is_committed === false) {
+        return false;
+      }
+      // Para registros históricos sin flag: si no es el slot _default y tiene datos
+      if (!r.record_id.endsWith('_default') && isRecordWithData(r)) {
+        return true;
+      }
+      return false;
+    }
+
     function updateRowBadges(recordId) {
       const rec = allRecords.find(r => r.record_id === recordId);
       if (!rec) return;
@@ -2693,12 +3065,12 @@
         statusBadge.innerText = st.text;
       }
 
-      // Pre-factura Info Badge
+      // Pre-factura Info Badge (solo coteja contra registros confirmados)
       const prefBadge = document.getElementById(`pref-badge-${recordId}`);
       if (prefBadge) {
         const prefClean = String(rec.pref_num || "").trim().toUpperCase();
         if (prefClean) {
-          const matches = allRecords.filter(r => String(r.pref_num || "").trim().toUpperCase() === prefClean);
+          const matches = allRecords.filter(r => isRecordCommitted(r) && String(r.pref_num || "").trim().toUpperCase() === prefClean);
           if (matches.length > 1) {
             let totalPref = 0;
             matches.forEach(m => totalPref += parseMoney(m.pref_val));
@@ -2716,12 +3088,12 @@
         }
       }
 
-      // OC Info Badge
+      // OC Info Badge (solo coteja contra registros confirmados)
       const ocBadge = document.getElementById(`oc-badge-${recordId}`);
       if (ocBadge) {
         const ocClean = String(rec.step2_oc || "").trim().toUpperCase();
         if (ocClean) {
-          const matches = allRecords.filter(r => String(r.step2_oc || "").trim().toUpperCase() === ocClean);
+          const matches = allRecords.filter(r => isRecordCommitted(r) && String(r.step2_oc || "").trim().toUpperCase() === ocClean);
           if (matches.length > 1) {
             let totalFacAgainstOc = 0;
             matches.forEach(m => totalFacAgainstOc += parseMoney(m.fac_val));
@@ -2739,12 +3111,12 @@
         }
       }
 
-      // Invoice Duplicate Warning Badge (NON-BLOCKING)
+      // Invoice Duplicate Warning Badge (NON-BLOCKING, solo coteja contra registros confirmados)
       const facBadge = document.getElementById(`fac-badge-${recordId}`);
       if (facBadge) {
         const facClean = String(rec.step3_fac || "").trim().toUpperCase();
         if (facClean) {
-          const otherMatches = allRecords.filter(r => r.record_id !== rec.record_id && String(r.step3_fac || "").trim().toUpperCase() === facClean);
+          const otherMatches = allRecords.filter(r => isRecordCommitted(r) && r.record_id !== rec.record_id && String(r.step3_fac || "").trim().toUpperCase() === facClean);
           if (otherMatches.length > 0) {
             const om = otherMatches[0];
             const valInfo = om.fac_val ? ` (${om.fac_val})` : '';
@@ -2802,21 +3174,31 @@
       const summaryEl = document.getElementById(`client-summary-${clientId}`);
       if (!summaryEl) return;
 
-      const clientRecs = allRecords.filter(r => r.client_id === clientId);
+      const clientRecs = allRecords.filter(r => r.client_id === clientId && isRecordCommitted(r));
       let totalPref = 0;
       let totalFac = 0;
       let facCount = 0;
+      const seenFac = new Set();
 
       clientRecs.forEach(r => {
         totalPref += parseMoney(r.pref_val);
-        totalFac += parseMoney(r.fac_val);
-        if (r.step3_fac && String(r.step3_fac).trim()) facCount++;
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+        if (facKey) {
+          if (!seenFac.has(facKey)) {
+            seenFac.add(facKey);
+            totalFac += parseMoney(r.fac_val);
+            facCount++;
+          }
+        } else if (parseMoney(r.fac_val) > 0) {
+          totalFac += parseMoney(r.fac_val);
+          facCount++;
+        }
       });
 
-      if (totalPref > 0 || totalFac > 0 || clientRecs.length > 1) {
+      if (totalPref > 0 || totalFac > 0 || clientRecs.length > 0) {
         summaryEl.innerHTML = `
           <div class="flex items-center gap-2 bg-white px-2.5 py-1 rounded-lg border border-slate-200 shadow-2xs">
-            <span class="text-[10px] text-slate-400 font-bold uppercase">${clientRecs.length} ${clientRecs.length === 1 ? 'fila' : 'filas'}</span>
+            <span class="text-[10px] text-slate-400 font-bold uppercase">${clientRecs.length} ${clientRecs.length === 1 ? 'partida' : 'partidas'}</span>
             <span class="text-slate-300">•</span>
             <span class="text-sky-700 font-bold">Pref: ${formatMoneyCOP(totalPref)}</span>
             <span class="text-slate-300">•</span>
@@ -3169,27 +3551,6 @@
     }
 
     // ==========================================
-    // HELPER: VERIFY IF A RECORD CONTAINS REAL DATA
-    // ==========================================
-    function isRecordWithData(r) {
-      if (!r) return false;
-      return Boolean(
-        r.step1 ||
-        (r.pref_num && String(r.pref_num).trim() !== "") ||
-        (r.pref_val && parseMoney(r.pref_val) > 0) ||
-        r.step2 ||
-        (r.step2_oc && String(r.step2_oc).trim() !== "") ||
-        r.step3 ||
-        (r.step3_fac && String(r.step3_fac).trim() !== "") ||
-        (r.fac_val && parseMoney(r.fac_val) > 0) ||
-        r.step4 ||
-        (r.fac_pdf_url && String(r.fac_pdf_url).trim() !== "") ||
-        (r.report_doc_url && String(r.report_doc_url).trim() !== "") ||
-        (r.notes && String(r.notes).trim() !== "")
-      );
-    }
-
-    // ==========================================
     // BUILD MODULAR CLIENT CARD DOM ELEMENT
     // ==========================================
     function buildClientCardElement(c) {
@@ -3230,6 +3591,8 @@
           step4: false,
           step4_date: "",
           notes: "",
+          is_committed: 0,
+          linked_pref_nums: "",
           updated_by: "Sistema"
         };
         cRecords = [defRec];
@@ -3239,11 +3602,12 @@
       // Determine active capture record vs committed records
       let activeRecord = cRecords.find(r => r.record_id === `rec_${c.id}_default`);
       if (!activeRecord) {
-        activeRecord = cRecords.find(r => !isRecordWithData(r)) || cRecords[0];
+        activeRecord = cRecords.find(r => !isRecordCommitted(r)) || cRecords[0];
       }
 
-      // Committed records: records other than the clean capture slot that have data
-      const committedRecords = cRecords.filter(r => r.record_id !== activeRecord.record_id && isRecordWithData(r));
+      // Committed records: records strictly saved via Enviar button
+      const committedRecords = cRecords.filter(r => isRecordCommitted(r));
+      const availablePrefs = cRecords.filter(item => isRecordCommitted(item) && (item.pref_num || parseMoney(item.pref_val) > 0));
 
       const card = document.createElement("div");
       card.id = `client-section-${c.id}`;
@@ -3280,9 +3644,17 @@
           </div>
         </div>
 
-        <div class="flex items-center gap-3 self-end md:self-center">
+        <div class="flex items-center gap-2 self-end md:self-center flex-wrap">
           <div id="client-summary-${c.id}"></div>
-          <button onclick="addNewRecord(${c.id}, this)" class="px-3 py-1.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs flex items-center gap-1.5 transition active:scale-95 ${isViewer ? 'hidden' : ''}" title="Agregar fila de captura adicional">
+          <button type="button" onclick="openAddPrefModal(${c.id})" class="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 border border-sky-300 shadow-2xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${isViewer ? 'hidden' : ''}" title="Añadir una nueva Pre-factura o Informe para esta empresa">
+            <i class="fa-solid fa-file-circle-plus text-sky-600"></i>
+            <span>+ Pre-factura</span>
+          </button>
+          <button type="button" onclick="openAddFacModal(${c.id})" class="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-300 shadow-2xs flex items-center gap-1.5 transition active:scale-95 cursor-pointer ${isViewer ? 'hidden' : ''}" title="Añadir una nueva Factura para esta empresa">
+            <i class="fa-solid fa-receipt text-emerald-600"></i>
+            <span>+ Factura</span>
+          </button>
+          <button type="button" onclick="addNewRecord(${c.id}, this)" class="px-2.5 py-1.5 text-xs font-bold rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-300 shadow-2xs flex items-center gap-1 transition active:scale-95 cursor-pointer ${isViewer ? 'hidden' : ''}" title="Agregar fila de captura adicional">
             <i class="fa-solid fa-plus text-[10px]"></i>
             <span>+ Fila Extra</span>
           </button>
@@ -3378,14 +3750,14 @@
 
                 <td class="p-2 bg-sky-50/30 border-x border-sky-100 align-top">
                   <div class="space-y-1.5">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between gap-1">
                       <label class="inline-flex items-center gap-1.5 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
                         <input type="checkbox" id="check-step1-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step1', this.checked)" ${r.step1 ? 'checked' : ''} class="w-4 h-4 rounded text-sky-600 focus:ring-sky-500">
                         <span id="label-step1-${r.record_id}" class="text-xs font-semibold ${r.step1 ? 'text-sky-800' : 'text-slate-500'}">
                           ${reqInf ? 'Informe Enviado' : 'Informe / Pre-fac'}
                         </span>
                       </label>
-                      ${!reqInf ? '<span class="text-[9px] font-bold text-sky-700 bg-sky-100/80 px-1.5 py-0.2 rounded border border-sky-200" title="Control interno de verificación para prefacturas">Interno</span>' : ''}
+                      <button type="button" onclick="openAddPrefModal(${c.id})" class="text-[9px] font-bold text-sky-700 hover:text-sky-900 bg-sky-100 hover:bg-sky-200 px-1.5 py-0.5 rounded border border-sky-200 transition cursor-pointer ${isViewer ? 'hidden' : ''}" title="Añadir nueva pre-factura en ventana dedicada">+ Nueva Pre-factura</button>
                     </div>
                     <div class="flex items-center gap-1.5">
                       <span class="text-[10px] text-slate-500 w-12 font-medium">Fecha:</span>
@@ -3452,10 +3824,13 @@
 
                 <td class="p-2 bg-emerald-50/30 border-r border-emerald-100 align-top">
                   <div class="space-y-1.5">
-                    <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
-                      <input type="checkbox" id="check-step3-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step3', this.checked)" ${r.step3 ? 'checked' : ''} class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
-                      <span id="label-step3-${r.record_id}" class="text-xs font-semibold ${r.step3 ? 'text-emerald-800' : 'text-slate-500'}">Factura Generada</span>
-                    </label>
+                    <div class="flex items-center justify-between gap-1">
+                      <label class="inline-flex items-center gap-2 ${isViewer ? 'opacity-70 cursor-not-allowed' : 'cursor-pointer'}">
+                        <input type="checkbox" id="check-step3-${r.record_id}" ${isViewer ? 'disabled' : ''} onchange="updateRecordField('${r.record_id}', 'step3', this.checked)" ${r.step3 ? 'checked' : ''} class="w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500">
+                        <span id="label-step3-${r.record_id}" class="text-xs font-semibold ${r.step3 ? 'text-emerald-800' : 'text-slate-500'}">Factura Generada</span>
+                      </label>
+                      <button type="button" onclick="openAddFacModal(${c.id})" class="text-[9px] font-bold text-emerald-700 hover:text-emerald-900 bg-emerald-100 hover:bg-emerald-200 px-1.5 py-0.5 rounded border border-emerald-200 transition cursor-pointer ${isViewer ? 'hidden' : ''}" title="Añadir nueva factura y asociar pre-facturas">+ Nueva Factura</button>
+                    </div>
                     <div class="flex items-center gap-1.5">
                       <span class="text-[10px] text-slate-500 w-12 font-medium">F. Gen:</span>
                       <input type="date" id="date-fac-${r.record_id}" ${isViewer ? 'disabled' : ''} value="${r.step3_date || ''}" onchange="updateRecordField('${r.record_id}', 'step3_date', this.value)" class="text-[11px] bg-white border border-slate-200 rounded px-1.5 py-0.5 text-slate-700 w-32 focus:outline-none focus:ring-1 focus:ring-emerald-500">
@@ -3496,6 +3871,54 @@
                     </div>
                     <div id="fac-badge-${r.record_id}"></div>
                     <div id="diff-badge-${r.record_id}"></div>
+                    <div class="mt-2 pt-1.5 border-t border-emerald-200/70">
+                      <button type="button" onclick="togglePrefAssociator('${r.record_id}')" class="w-full text-left flex items-center justify-between text-[10px] font-bold text-emerald-800 hover:text-emerald-950 bg-emerald-50/80 hover:bg-emerald-100/80 px-2 py-1 rounded-lg border border-emerald-200 transition cursor-pointer" title="Amparar una o varias prefacturas existentes en esta factura">
+                        <span class="flex items-center gap-1.5">
+                          <i class="fa-solid fa-link text-emerald-600"></i>
+                          <span>Asociar Pre-factura(s) (${availablePrefs.length})</span>
+                        </span>
+                        <i id="chevron-pref-${r.record_id}" class="fa-solid fa-chevron-down text-[9px] text-emerald-600"></i>
+                      </button>
+                      <div id="pref-assoc-box-${r.record_id}" class="hidden mt-1.5 p-2 bg-emerald-50 rounded-xl border border-emerald-200 space-y-1.5 shadow-2xs">
+                        ${availablePrefs.length === 0 ? `
+                          <div class="text-[10px] text-slate-500 italic p-1.5 bg-white/80 rounded-lg border border-dashed border-emerald-200">
+                            No hay pre-facturas con valores guardadas aún para esta empresa.<br>
+                            Puede registrar una con el botón "+ Nueva Pre-factura" o digitar el valor directamente.
+                          </div>
+                        ` : `
+                          <div class="flex items-center justify-between text-[9px] font-bold text-emerald-950 uppercase tracking-wider">
+                            <span>Pre-facturas disponibles:</span>
+                            <span class="text-emerald-700">Multi-selección</span>
+                          </div>
+                          <div class="space-y-1 max-h-32 overflow-y-auto pr-0.5">
+                            ${availablePrefs.map(ap => {
+                              const pNum = (ap.pref_num || 'S/N').trim();
+                              const pVal = parseMoney(ap.pref_val);
+                              const pGrp = ap.area_group ? `[${ap.area_group}] ` : '';
+                              const isChecked = (r.linked_pref_nums || '').split(',').map(s => s.trim().toUpperCase()).includes(pNum.toUpperCase());
+                              return `
+                                <label class="flex items-center justify-between text-[10px] text-slate-700 cursor-pointer hover:bg-emerald-100/70 p-1 rounded-lg transition">
+                                  <span class="flex items-center gap-1.5 truncate">
+                                    <input type="checkbox" class="pref-assoc-cb-${r.record_id} rounded text-emerald-600 focus:ring-emerald-500" data-num="${pNum}" data-val="${pVal}" ${isChecked ? 'checked' : ''} onchange="onPrefAssocChanged('${r.record_id}')">
+                                    <span class="font-mono font-bold text-slate-800 truncate">${pGrp}${pNum}</span>
+                                  </span>
+                                  <span class="font-mono text-emerald-800 font-bold shrink-0">${formatCurrencyString(pVal)}</span>
+                                </label>
+                              `;
+                            }).join('')}
+                          </div>
+                          <div class="pt-1.5 border-t border-emerald-200 flex items-center justify-between gap-1 text-[10px]">
+                            <div class="font-bold text-emerald-950">
+                              Total: <span id="pref-assoc-sum-val-${r.record_id}" class="font-mono font-extrabold text-emerald-800">$ 0</span>
+                            </div>
+                            <button type="button" onclick="applyPrefAssocTotal('${r.record_id}')" class="px-2 py-0.5 text-[9px] font-extrabold rounded bg-emerald-600 hover:bg-emerald-700 text-white shadow-2xs transition active:scale-95 cursor-pointer" title="Copiar suma calculada al campo Valor Factura">
+                              Copiar a Valor Fac
+                            </button>
+                          </div>
+                        `}
+                        <input type="hidden" id="linked-prefs-${r.record_id}" value="${r.linked_pref_nums || ''}">
+                      </div>
+                    </div>
                   </div>
                 </td>
 
@@ -3601,6 +4024,13 @@
                       <td class="p-2 bg-emerald-50/20 border-r border-emerald-100">
                         <div class="font-bold text-emerald-950 font-mono">${cr.step3_fac || '<span class="text-slate-400 font-normal italic">Sin Factura</span>'}</div>
                         <div class="font-mono text-[11px] font-bold text-emerald-800">${formatCurrencyString(cr.fac_val) || '$ 0'}</div>
+                        ${cr.linked_pref_nums ? `
+                          <div class="mt-0.5">
+                            <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 font-mono" title="Pre-facturas amparadas en esta factura">
+                              <i class="fa-solid fa-link text-[8px]"></i> Prefs: ${cr.linked_pref_nums}
+                            </span>
+                          </div>
+                        ` : ''}
                         ${cr.step3_date ? `<div class="text-[10px] text-slate-500 font-mono">${cr.step3_date}</div>` : ''}
                         ${cr.fac_pdf_url ? `
                           <div class="mt-1">
@@ -3646,9 +4076,19 @@
               Panel Consolidado de Registros Guardados (${committedRecords.length})
             </h4>
           </div>
-          <span class="text-[11px] text-slate-500 font-medium italic">Historial de facturación de esta empresa</span>
+          <div class="flex items-center gap-2">
+            <span class="text-[11px] text-slate-500 font-medium italic hidden sm:inline">Historial de facturación</span>
+            ${committedRecords.length > 0 ? `
+              <button type="button" onclick="toggleClientConsolidatedList(${c.id})" class="px-2 py-0.5 text-[10px] font-bold text-blue-700 hover:text-blue-900 bg-blue-50 hover:bg-blue-100 rounded-lg border border-blue-200 transition flex items-center gap-1">
+                <span id="toggle-list-text-${c.id}">Ocultar</span>
+                <i id="toggle-list-icon-${c.id}" class="fa-solid fa-chevron-up text-[9px]"></i>
+              </button>
+            ` : ''}
+          </div>
         </div>
-        ${tableRowsHtml}
+        <div id="client-consolidated-table-wrap-${c.id}">
+          ${tableRowsHtml}
+        </div>
       `;
       card.appendChild(consolidatedSection);
 
@@ -3693,18 +4133,24 @@
         if (filterResp !== "ALL" && c.resp !== filterResp) return;
 
         const cRecords = allRecords.filter(r => r.client_id === c.id);
+        const committedClientRecs = cRecords.filter(r => isRecordCommitted(r));
+
         if (filterFreq !== "ALL" && !cRecords.some(r => r.freq_type === filterFreq)) {
           if (c.freq_type !== filterFreq && c.freqType !== filterFreq) return;
         }
-        if (filterStatus !== "ALL" && !cRecords.some(r => computeRecordStatus(r).key === filterStatus)) {
-          return;
+        if (filterStatus !== "ALL") {
+          const matchCommitted = committedClientRecs.some(r => computeRecordStatus(r).key === filterStatus);
+          const matchDefault = (committedClientRecs.length === 0 && filterStatus === "PENDIENTE");
+          if (!matchCommitted && !matchDefault) return;
         }
-        if (filterTraffic !== "ALL" && !cRecords.some(r => computeRecordTrafficLight(r).level.toUpperCase() === filterTraffic)) {
-          return;
+        if (filterTraffic !== "ALL") {
+          const matchCommitted = committedClientRecs.some(r => computeRecordTrafficLight(r).level.toUpperCase() === filterTraffic);
+          const matchDefault = (committedClientRecs.length === 0 && filterTraffic === "NORMAL");
+          if (!matchCommitted && !matchDefault) return;
         }
         if (search) {
           const matchClient = c.name.toLowerCase().includes(search) || (c.contact && c.contact.toLowerCase().includes(search)) || (c.obs && c.obs.toLowerCase().includes(search));
-          const matchRecord = cRecords.some(r => 
+          const matchRecord = committedClientRecs.some(r => 
             (r.step3_fac && r.step3_fac.toLowerCase().includes(search)) ||
             (r.pref_num && r.pref_num.toLowerCase().includes(search)) ||
             (r.step2_oc && r.step2_oc.toLowerCase().includes(search)) ||
@@ -3746,8 +4192,9 @@
       const facVal = document.getElementById(`text-fac-val-${recordId}`);
       const step4Check = document.getElementById(`check-step4-${recordId}`);
       const notesEl = document.getElementById(`text-notes-${recordId}`);
-
       const existingRec = allRecords.find(r => r.record_id === recordId) || {};
+      const linkedPrefInput = document.getElementById(`linked-prefs-${recordId}`);
+      const linkedPrefVal = linkedPrefInput ? linkedPrefInput.value.trim() : (existingRec.linked_pref_nums || "");
 
       const payload = {
         record_id: recordId,
@@ -3773,13 +4220,14 @@
         notes: notesEl ? notesEl.value.trim() : (existingRec.notes || ""),
         fac_pdf_url: existingRec.fac_pdf_url || "",
         report_doc_url: existingRec.report_doc_url || "",
+        linked_pref_nums: linkedPrefVal,
         author: currentUser ? currentUser.name : "Usuario"
       };
 
       const hasData = payload.step1 || payload.pref_num || (payload.pref_val && parseMoney(payload.pref_val) > 0) ||
                       payload.step2 || payload.step2_oc ||
                       payload.step3 || payload.step3_fac || (payload.fac_val && parseMoney(payload.fac_val) > 0) ||
-                      payload.step4 || payload.fac_pdf_url || payload.report_doc_url || payload.notes;
+                      payload.step4 || payload.fac_pdf_url || payload.report_doc_url || payload.notes || payload.linked_pref_nums;
 
       if (!hasData) {
         alert("Por favor diligencie algún dato de la factura o pre-factura antes de enviar al registro.");
@@ -3823,6 +4271,387 @@
         if (btnEl) {
           btnEl.disabled = false;
           btnEl.innerHTML = '<i class="fa-solid fa-cloud-arrow-up text-xs"></i> <span>Enviar a Registro</span>';
+        }
+      }
+    }
+
+    // ==========================================
+    // MODAL: AÑADIR NUEVA PRE-FACTURA
+    // ==========================================
+    function openAddPrefModal(clientId = null) {
+      if (!currentUser || currentUser.role === "viewer") {
+        alert("El usuario invitado no tiene permisos para crear pre-facturas.");
+        return;
+      }
+      const clientSelect = document.getElementById("addPrefClientId");
+      if (!clientSelect) return;
+
+      const clientsList = allClients.length > 0 ? allClients : CLIENTS_MASTER;
+      clientSelect.innerHTML = clientsList.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+
+      if (clientId) {
+        clientSelect.value = clientId;
+      }
+      onAddPrefClientChanged(clientSelect.value);
+
+      document.getElementById("addPrefDate").value = new Date().toISOString().split("T")[0];
+      document.getElementById("addPrefNum").value = "";
+      document.getElementById("addPrefVal").value = "";
+      document.getElementById("addPrefNotes").value = "";
+      const step1Check = document.getElementById("addPrefStep1Check");
+      if (step1Check) step1Check.checked = true;
+      const reportFileInput = document.getElementById("addPrefReportFileInput");
+      if (reportFileInput) reportFileInput.value = "";
+
+      document.getElementById("addPrefacturaModal").classList.remove("hidden");
+    }
+
+    function closeAddPrefModal() {
+      const modal = document.getElementById("addPrefacturaModal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function onAddPrefClientChanged(clientId) {
+      clientId = parseInt(clientId, 10);
+      const c = (allClients.length > 0 ? allClients : CLIENTS_MASTER).find(item => item.id === clientId);
+      if (!c) return;
+
+      const groups = getOperationalGroupsForClient(c.name, clientId);
+      const groupSelect = document.getElementById("addPrefAreaGroup");
+      if (groupSelect) {
+        let opts = `<option value="">-- General / Sin Grupo --</option>`;
+        groups.forEach(g => {
+          opts += `<option value="${g}">${g}</option>`;
+        });
+        groupSelect.innerHTML = opts;
+      }
+
+      const prog = c.prog || "";
+      const freqSelect = document.getElementById("addPrefFreq");
+      if (freqSelect) {
+        if (prog.includes("SEMANAL")) freqSelect.value = "Semanal";
+        else if (prog.includes("INMEDIATO")) freqSelect.value = "Por Evento";
+        else if (prog.includes("MENSUAL")) freqSelect.value = "Mensual";
+        else freqSelect.value = "Quincenal";
+        onAddPrefFreqChanged(freqSelect.value);
+      }
+    }
+
+    function onAddPrefFreqChanged(freqVal) {
+      const detailSelect = document.getElementById("addPrefPeriodDetail");
+      if (!detailSelect) return;
+      const opts = getDetailOptionsForFreq(freqVal);
+      detailSelect.innerHTML = opts.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+    }
+
+    async function submitAddPrefactura(e) {
+      e.preventDefault();
+      const btn = document.getElementById("saveAddPrefBtn");
+      const clientId = parseInt(document.getElementById("addPrefClientId").value, 10);
+      const areaGroup = document.getElementById("addPrefAreaGroup").value;
+      const freqType = document.getElementById("addPrefFreq").value;
+      const month = document.getElementById("addPrefMonth").value;
+      const periodDetail = document.getElementById("addPrefPeriodDetail").value;
+      const step1Date = document.getElementById("addPrefDate").value;
+      const prefNum = document.getElementById("addPrefNum").value.trim();
+      const prefVal = document.getElementById("addPrefVal").value.trim();
+      const step1Check = document.getElementById("addPrefStep1Check").checked;
+      const notes = document.getElementById("addPrefNotes").value.trim();
+      const fileInput = document.getElementById("addPrefReportFileInput");
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+      }
+
+      try {
+        const res = await fetch("/api/records/create_committed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: clientId,
+            freq_type: freqType,
+            month: month,
+            period_detail: periodDetail,
+            area_group: areaGroup,
+            step1: step1Check,
+            step1_date: step1Date,
+            pref_num: prefNum,
+            pref_val: prefVal,
+            notes: notes,
+            author: currentUser ? currentUser.name : "Usuario"
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success && data.record) {
+          const newRec = data.record;
+          allRecords.push(newRec);
+
+          if (fileInput && fileInput.files && fileInput.files.length > 0) {
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            formData.append("record_id", newRec.record_id);
+            formData.append("doc_type", "report_doc");
+            formData.append("user", currentUser ? currentUser.name : "Usuario");
+            try {
+              const fRes = await fetch("/api/files/upload", { method: "POST", body: formData });
+              const fData = await fRes.json();
+              if (fRes.ok && fData.success) {
+                newRec.report_doc_url = fData.file_url;
+              }
+            } catch(e) {}
+          }
+
+          closeAddPrefModal();
+          renderSingleClientSection(clientId);
+          renderPrefacturasTable();
+          renderFacturasTable();
+          renderIndependentMatrixTable();
+          updateKPIs();
+          showToast(`✓ Pre-factura <strong>${prefNum || ''}</strong> registrada con éxito (${prefVal})`);
+        } else {
+          alert(data.detail || "Error al registrar pre-factura.");
+        }
+      } catch(err) {
+        alert("Error de conexión al guardar pre-factura.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span>Guardar Pre-factura</span>';
+        }
+      }
+    }
+
+    // ==========================================
+    // MODAL: AÑADIR NUEVA FACTURA
+    // ==========================================
+    function openAddFacModal(clientId = null) {
+      if (!currentUser || currentUser.role === "viewer") {
+        alert("El usuario invitado no tiene permisos para crear facturas.");
+        return;
+      }
+      const clientSelect = document.getElementById("addFacClientId");
+      if (!clientSelect) return;
+
+      const clientsList = allClients.length > 0 ? allClients : CLIENTS_MASTER;
+      clientSelect.innerHTML = clientsList.map(c => `<option value="${c.id}">${c.name}</option>`).join("");
+
+      if (clientId) {
+        clientSelect.value = clientId;
+      }
+      onAddFacClientChanged(clientSelect.value);
+
+      document.getElementById("addFacDate").value = new Date().toISOString().split("T")[0];
+      document.getElementById("addFacNum").value = "";
+      document.getElementById("addFacVal").value = "";
+      document.getElementById("addFacOc").value = "";
+      document.getElementById("addFacOcDate").value = "";
+      document.getElementById("addFacStep4Date").value = "";
+      document.getElementById("addFacStep2Check").checked = false;
+      document.getElementById("addFacStep3Check").checked = true;
+      document.getElementById("addFacStep4Check").checked = false;
+      document.getElementById("addFacNotes").value = "";
+      const pdfFileInput = document.getElementById("addFacPdfFileInput");
+      if (pdfFileInput) pdfFileInput.value = "";
+
+      document.getElementById("addFacturaModal").classList.remove("hidden");
+    }
+
+    function closeAddFacModal() {
+      const modal = document.getElementById("addFacturaModal");
+      if (modal) modal.classList.add("hidden");
+    }
+
+    function onAddFacClientChanged(clientId) {
+      clientId = parseInt(clientId, 10);
+      const c = (allClients.length > 0 ? allClients : CLIENTS_MASTER).find(item => item.id === clientId);
+      if (!c) return;
+
+      const groups = getOperationalGroupsForClient(c.name, clientId);
+      const groupSelect = document.getElementById("addFacAreaGroup");
+      if (groupSelect) {
+        let opts = `<option value="">-- General / Sin Grupo --</option>`;
+        groups.forEach(g => {
+          opts += `<option value="${g}">${g}</option>`;
+        });
+        groupSelect.innerHTML = opts;
+      }
+
+      const prog = c.prog || "";
+      const freqSelect = document.getElementById("addFacFreq");
+      if (freqSelect) {
+        if (prog.includes("SEMANAL")) freqSelect.value = "Semanal";
+        else if (prog.includes("INMEDIATO")) freqSelect.value = "Por Evento";
+        else if (prog.includes("MENSUAL")) freqSelect.value = "Mensual";
+        else freqSelect.value = "Quincenal";
+        onAddFacFreqChanged(freqSelect.value);
+      }
+
+      populateAddFacPrefList(clientId);
+    }
+
+    function onAddFacFreqChanged(freqVal) {
+      const detailSelect = document.getElementById("addFacPeriodDetail");
+      if (!detailSelect) return;
+      const opts = getDetailOptionsForFreq(freqVal);
+      detailSelect.innerHTML = opts.map(opt => `<option value="${opt}">${opt}</option>`).join("");
+    }
+
+    function populateAddFacPrefList(clientId) {
+      const listEl = document.getElementById("addFacPrefList");
+      const badgeEl = document.getElementById("addFacPrefCountBadge");
+      const sumValEl = document.getElementById("addFacPrefSumVal");
+      const linkedInput = document.getElementById("addFacLinkedPrefNums");
+      if (!listEl) return;
+
+      const clientPrefs = allRecords.filter(r => r.client_id === clientId && isRecordCommitted(r) && (r.pref_num || parseMoney(r.pref_val) > 0));
+      if (badgeEl) badgeEl.innerText = `${clientPrefs.length} disponibles`;
+      if (linkedInput) linkedInput.value = "";
+      if (sumValEl) sumValEl.innerText = "$ 0";
+
+      if (clientPrefs.length === 0) {
+        listEl.innerHTML = `
+          <div class="text-[11px] text-slate-500 italic p-2 bg-slate-50 rounded-lg border border-dashed border-slate-200 text-center">
+            No hay pre-facturas registradas aún para este cliente.<br>
+            Puede ingresar el número y valor de la factura manualmente, o registrar pre-facturas primero con "+ Nueva Pre-factura".
+          </div>
+        `;
+        return;
+      }
+
+      listEl.innerHTML = clientPrefs.map(ap => {
+        const pNum = (ap.pref_num || 'S/N').trim();
+        const pVal = parseMoney(ap.pref_val);
+        const pGrp = ap.area_group ? `[${ap.area_group}] ` : '';
+        return `
+          <label class="flex items-center justify-between text-xs text-slate-700 cursor-pointer hover:bg-emerald-100/70 p-1.5 rounded-lg transition">
+            <span class="flex items-center gap-2 truncate">
+              <input type="checkbox" class="add-fac-pref-cb rounded text-emerald-600 focus:ring-emerald-500" data-num="${pNum}" data-val="${pVal}" onchange="onAddFacPrefAssocChanged()">
+              <span class="font-mono font-bold text-slate-800">${pGrp}${pNum}</span>
+              <span class="text-[10px] text-slate-500">${ap.month} ${ap.period_detail}</span>
+            </span>
+            <span class="font-mono font-bold text-emerald-800">${formatCurrencyString(pVal)}</span>
+          </label>
+        `;
+      }).join("");
+    }
+
+    function onAddFacPrefAssocChanged() {
+      const cbs = document.querySelectorAll(".add-fac-pref-cb:checked");
+      let total = 0;
+      const selectedNums = [];
+      cbs.forEach(cb => {
+        total += parseMoney(cb.dataset.val);
+        selectedNums.push(cb.dataset.num);
+      });
+
+      const sumValEl = document.getElementById("addFacPrefSumVal");
+      if (sumValEl) sumValEl.innerText = formatMoneyCOP(total);
+
+      const linkedInput = document.getElementById("addFacLinkedPrefNums");
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+    }
+
+    function applyAddFacPrefSumToFacVal() {
+      const cbs = document.querySelectorAll(".add-fac-pref-cb:checked");
+      let total = 0;
+      cbs.forEach(cb => {
+        total += parseMoney(cb.dataset.val);
+      });
+      const facValInput = document.getElementById("addFacVal");
+      if (facValInput) {
+        facValInput.value = formatCurrencyString(total);
+      }
+    }
+
+    async function submitAddFactura(e) {
+      e.preventDefault();
+      const btn = document.getElementById("saveAddFacBtn");
+      const clientId = parseInt(document.getElementById("addFacClientId").value, 10);
+      const areaGroup = document.getElementById("addFacAreaGroup").value;
+      const freqType = document.getElementById("addFacFreq").value;
+      const month = document.getElementById("addFacMonth").value;
+      const periodDetail = document.getElementById("addFacPeriodDetail").value;
+      const step3Date = document.getElementById("addFacDate").value;
+      const step3Fac = document.getElementById("addFacNum").value.trim();
+      const facVal = document.getElementById("addFacVal").value.trim();
+      const step3Check = document.getElementById("addFacStep3Check").checked;
+      const step2Oc = document.getElementById("addFacOc").value.trim();
+      const step2Date = document.getElementById("addFacOcDate").value;
+      const step2Check = document.getElementById("addFacStep2Check").checked;
+      const step4Check = document.getElementById("addFacStep4Check").checked;
+      const step4Date = document.getElementById("addFacStep4Date").value;
+      const notes = document.getElementById("addFacNotes").value.trim();
+      const linkedPrefNums = document.getElementById("addFacLinkedPrefNums").value.trim();
+      const fileInput = document.getElementById("addFacPdfFileInput");
+
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Guardando...';
+      }
+
+      try {
+        const res = await fetch("/api/records/create_committed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            client_id: clientId,
+            freq_type: freqType,
+            month: month,
+            period_detail: periodDetail,
+            area_group: areaGroup,
+            step2: step2Check || Boolean(step2Oc),
+            step2_oc: step2Oc,
+            step2_date: step2Date,
+            step3: step3Check,
+            step3_fac: step3Fac,
+            step3_date: step3Date,
+            fac_val: facVal,
+            step4: step4Check,
+            step4_date: step4Date,
+            notes: notes,
+            linked_pref_nums: linkedPrefNums,
+            author: currentUser ? currentUser.name : "Usuario"
+          })
+        });
+
+        const data = await res.json();
+        if (res.ok && data.success && data.record) {
+          const newRec = data.record;
+          allRecords.push(newRec);
+
+          if (fileInput && fileInput.files && fileInput.files.length > 0) {
+            const formData = new FormData();
+            formData.append("file", fileInput.files[0]);
+            formData.append("record_id", newRec.record_id);
+            formData.append("doc_type", "fac_pdf");
+            formData.append("user", currentUser ? currentUser.name : "Usuario");
+            try {
+              const fRes = await fetch("/api/files/upload", { method: "POST", body: formData });
+              const fData = await fRes.json();
+              if (fRes.ok && fData.success) {
+                newRec.fac_pdf_url = fData.file_url;
+              }
+            } catch(e) {}
+          }
+
+          closeAddFacModal();
+          renderSingleClientSection(clientId);
+          renderPrefacturasTable();
+          renderFacturasTable();
+          renderIndependentMatrixTable();
+          updateKPIs();
+          showToast(`✓ Factura <strong>${step3Fac}</strong> registrada con éxito (${facVal})`);
+        } else {
+          alert(data.detail || "Error al registrar factura.");
+        }
+      } catch(err) {
+        alert("Error de conexión al guardar factura.");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = '<i class="fa-solid fa-cloud-arrow-up"></i> <span>Guardar Factura</span>';
         }
       }
     }
@@ -3899,6 +4728,48 @@
       document.getElementById("editRecStep4").checked = Boolean(rec.step4);
       document.getElementById("editRecStep4Date").value = rec.step4_date || "";
       document.getElementById("editRecNotes").value = rec.notes || "";
+
+      // Enfoque Híbrido: Poblar lista de multi-asociación de pre-facturas para el modal
+      const clientCommittedPrefs = allRecords.filter(item => item.client_id === rec.client_id && item.record_id !== rec.record_id && isRecordCommitted(item) && (item.pref_num || parseMoney(item.pref_val) > 0));
+      const editAssocSec = document.getElementById("editModalPrefAssocSection");
+      const editAssocList = document.getElementById("editModalPrefAssocList");
+      const editAssocCount = document.getElementById("editModalPrefAssocCount");
+      const linkedPrefInput = document.getElementById("editRecLinkedPrefNums");
+      
+      if (linkedPrefInput) linkedPrefInput.value = rec.linked_pref_nums || "";
+
+      if (editAssocSec && editAssocList) {
+        if (clientCommittedPrefs.length > 0) {
+          editAssocSec.classList.remove("hidden");
+          if (editAssocCount) editAssocCount.innerText = `${clientCommittedPrefs.length} disponibles`;
+          
+          const currentLinked = (rec.linked_pref_nums || "").split(",").map(s => s.trim().toUpperCase());
+          let sumAssoc = 0;
+
+          editAssocList.innerHTML = clientCommittedPrefs.map(ap => {
+            const apNum = (ap.pref_num || 'S/N').trim();
+            const apVal = parseMoney(ap.pref_val);
+            const isChecked = currentLinked.includes(apNum.toUpperCase());
+            if (isChecked) sumAssoc += apVal;
+            const apGrp = ap.area_group ? `[${ap.area_group}] ` : '';
+
+            return `
+              <label class="flex items-center justify-between text-xs text-slate-700 cursor-pointer hover:bg-emerald-100/70 p-1.5 rounded-lg transition">
+                <span class="flex items-center gap-2 truncate">
+                  <input type="checkbox" class="edit-modal-pref-cb rounded text-emerald-600 focus:ring-emerald-500" data-num="${apNum}" data-val="${apVal}" ${isChecked ? 'checked' : ''} onchange="onEditModalPrefAssocChanged()">
+                  <span class="font-mono font-bold text-slate-800">${apGrp}${apNum}</span>
+                </span>
+                <span class="font-mono font-bold text-emerald-800">${formatCurrencyString(apVal)}</span>
+              </label>
+            `;
+          }).join("");
+
+          const sumValEl = document.getElementById("editModalPrefAssocSumVal");
+          if (sumValEl) sumValEl.innerText = formatMoneyCOP(sumAssoc);
+        } else {
+          editAssocSec.classList.add("hidden");
+        }
+      }
 
       document.getElementById("editRecordModal").classList.remove("hidden");
     }
@@ -4008,6 +4879,7 @@
         notes: document.getElementById("editRecNotes").value.trim(),
         fac_pdf_url: document.getElementById("editRecFacPdfUrl").value,
         report_doc_url: document.getElementById("editRecReportDocUrl").value,
+        linked_pref_nums: document.getElementById("editRecLinkedPrefNums") ? document.getElementById("editRecLinkedPrefNums").value.trim() : "",
         author: currentUser ? currentUser.name : "Usuario"
       };
 
@@ -4081,6 +4953,144 @@
     }
 
     // ==========================================
+    // ENFOQUE HÍBRIDO: MULTI-ASOCIACIÓN DE PREFACTURAS HELPERS
+    // ==========================================
+    function togglePrefAssociator(recordId) {
+      const box = document.getElementById(`pref-assoc-box-${recordId}`);
+      const chev = document.getElementById(`chevron-pref-${recordId}`);
+      if (!box) return;
+      const isHidden = box.classList.contains("hidden");
+      if (isHidden) {
+        box.classList.remove("hidden");
+        if (chev) {
+          chev.classList.remove("fa-chevron-down");
+          chev.classList.add("fa-chevron-up");
+        }
+        onPrefAssocChanged(recordId);
+      } else {
+        box.classList.add("hidden");
+        if (chev) {
+          chev.classList.remove("fa-chevron-up");
+          chev.classList.add("fa-chevron-down");
+        }
+      }
+    }
+
+    function onPrefAssocChanged(recordId) {
+      const checkboxes = document.querySelectorAll(`.pref-assoc-cb-${recordId}`);
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const sumEl = document.getElementById(`pref-assoc-sum-val-${recordId}`);
+      if (sumEl) sumEl.innerText = formatMoneyCOP(sumVal);
+
+      const linkedInput = document.getElementById(`linked-prefs-${recordId}`);
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+
+      const rec = allRecords.find(r => r.record_id === recordId);
+      if (rec) {
+        rec.linked_pref_nums = selectedNums.join(", ");
+      }
+    }
+
+    function applyPrefAssocTotal(recordId) {
+      const checkboxes = document.querySelectorAll(`.pref-assoc-cb-${recordId}`);
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const valInput = document.getElementById(`text-fac-val-${recordId}`);
+      if (valInput) {
+        valInput.value = formatCurrencyString(sumVal);
+        onMoneyBlur(valInput, recordId, 'fac_val');
+      }
+
+      const linkedInput = document.getElementById(`linked-prefs-${recordId}`);
+      if (linkedInput) {
+        linkedInput.value = selectedNums.join(", ");
+        updateRecordField(recordId, 'linked_pref_nums', selectedNums.join(", "));
+      }
+
+      showToast(`✓ Suma de ${selectedNums.length} pre-factura(s) (${formatMoneyCOP(sumVal)}) copiada al valor de la factura.`);
+    }
+
+    function toggleClientConsolidatedList(clientId) {
+      const tableWrap = document.getElementById(`client-consolidated-table-wrap-${clientId}`);
+      const icon = document.getElementById(`toggle-list-icon-${clientId}`);
+      const text = document.getElementById(`toggle-list-text-${clientId}`);
+      if (!tableWrap) return;
+      const isHidden = tableWrap.classList.contains("hidden");
+      if (isHidden) {
+        tableWrap.classList.remove("hidden");
+        if (icon) {
+          icon.classList.remove("fa-chevron-down");
+          icon.classList.add("fa-chevron-up");
+        }
+        if (text) text.innerText = "Ocultar";
+      } else {
+        tableWrap.classList.add("hidden");
+        if (icon) {
+          icon.classList.remove("fa-chevron-up");
+          icon.classList.add("fa-chevron-down");
+        }
+        if (text) text.innerText = "Ver listado";
+      }
+    }
+
+    function onEditModalPrefAssocChanged() {
+      const checkboxes = document.querySelectorAll(".edit-modal-pref-cb");
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const sumValEl = document.getElementById("editModalPrefAssocSumVal");
+      if (sumValEl) sumValEl.innerText = formatMoneyCOP(sumVal);
+
+      const linkedInput = document.getElementById("editRecLinkedPrefNums");
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+    }
+
+    function applyEditModalPrefAssocSum() {
+      const checkboxes = document.querySelectorAll(".edit-modal-pref-cb");
+      let sumVal = 0;
+      const selectedNums = [];
+      checkboxes.forEach(cb => {
+        if (cb.checked) {
+          sumVal += parseFloat(cb.getAttribute("data-val") || "0");
+          const num = cb.getAttribute("data-num");
+          if (num && num !== 'S/N') selectedNums.push(num);
+        }
+      });
+
+      const facValInput = document.getElementById("editRecFacVal");
+      if (facValInput) facValInput.value = formatCurrencyString(sumVal);
+
+      const linkedInput = document.getElementById("editRecLinkedPrefNums");
+      if (linkedInput) linkedInput.value = selectedNums.join(", ");
+
+      showToast(`✓ Suma de ${selectedNums.length} pre-factura(s) (${formatMoneyCOP(sumVal)}) aplicada al campo Valor Factura.`);
+    }
+
+    // ==========================================
     // RENDER PRE-FACTURAS TRACKING TABLE (READ ONLY + EDIT MODAL)
     // ==========================================
     function renderPrefacturasTable() {
@@ -4101,12 +5111,13 @@
       const filterMode = filterSelect ? filterSelect.value : "all";
 
       const prefRows = allRecords.filter(r => {
+        if (!isRecordCommitted(r)) return false;
         const c = clientMap[r.client_id] || { name: r.client_name };
         const pVal = parseMoney(r.pref_val);
         const hasPrefNum = Boolean(r.pref_num && String(r.pref_num).trim());
 
-        // EXCLUIR registros con valor $ 0 o sin número de prefactura
-        if (pVal <= 0 && !hasPrefNum) return false;
+        // EXCLUIR estrictamente registros con valor $ 0 o sin valor
+        if (pVal <= 0) return false;
 
         if (filterMode === "verified" && !r.step1) return false;
         if (filterMode === "pending" && r.step1) return false;
@@ -4232,8 +5243,9 @@
       const searchQ = searchInput ? searchInput.value.toLowerCase().trim() : "";
       const filterSelect = document.getElementById("facFilterSelect");
       const filterMode = filterSelect ? filterSelect.value : "invoiced";
-
+      const seenFacNumbers = new Set();
       const facRows = allRecords.filter(r => {
+        if (!isRecordCommitted(r)) return false;
         const c = clientMap[r.client_id] || { name: r.client_name };
         const hasFac = (r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && String(r.fac_val).trim()) || r.step3;
 
@@ -4251,14 +5263,33 @@
         return true;
       });
 
+      if (facRows.length === 0) {
+        tbody.innerHTML = `
+          <tr>
+            <td colspan="13" class="p-8 text-center text-slate-400">
+              <i class="fa-solid fa-file-invoice-dollar text-3xl mb-2 text-slate-300"></i>
+              <p class="font-bold text-xs text-slate-600">No hay facturas registradas en este filtro</p>
+              <p class="text-[11px] text-slate-400 mt-1">Haga clic en "+ Nueva Factura" o complete los datos en la tabla y presione "Enviar".</p>
+            </td>
+          </tr>
+        `;
+      }
+
       facRows.forEach((r, idx) => {
         const c = clientMap[r.client_id] || { name: r.client_name, resp: 'Edwar' };
         const fVal = parseMoney(r.fac_val);
         const tl = computeRecordTrafficLight(r);
-        if (fVal > 0) {
-          totalFacVal += fVal;
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+
+        if (facKey) {
+          if (!seenFacNumbers.has(facKey)) {
+            seenFacNumbers.add(facKey);
+            if (fVal > 0) totalFacVal += fVal;
+            countFac++;
+          }
+        } else {
+          if (fVal > 0) totalFacVal += fVal;
         }
-        if (r.step3_fac && String(r.step3_fac).trim()) countFac++;
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-emerald-50/30 border-b border-slate-100 transition";
@@ -4279,7 +5310,16 @@
           </td>
           <td class="p-2.5 text-slate-600 font-medium">${r.month} - ${r.period_detail}</td>
           <td class="p-2.5 text-center text-slate-600 font-mono text-[11px]">${r.step3_date || '-'}</td>
-          <td class="p-2.5 bg-emerald-50/50 font-bold text-emerald-950 font-mono">${r.step3_fac || '<span class="text-slate-400 font-normal italic">Sin número</span>'}</td>
+          <td class="p-2.5 bg-emerald-50/50 font-bold text-emerald-950 font-mono">
+            <div>${r.step3_fac || '<span class="text-slate-400 font-normal italic">Sin número</span>'}</div>
+            ${r.linked_pref_nums ? `
+              <div class="mt-0.5">
+                <span class="inline-flex items-center gap-1 px-1.5 py-0.2 rounded text-[9px] font-bold bg-sky-100 text-sky-800 border border-sky-200 font-mono" title="Pre-facturas amparadas en esta factura">
+                  <i class="fa-solid fa-link text-[8px]"></i> Prefs: ${r.linked_pref_nums}
+                </span>
+              </div>
+            ` : ''}
+          </td>
           <td class="p-2.5 bg-emerald-50/50 font-mono font-bold text-emerald-950 text-right">${formatCurrencyString(r.fac_val) || '$ 0'}</td>
           <td class="p-2.5 bg-amber-50/40">
             ${r.step2_oc ? `
@@ -4345,14 +5385,25 @@
 
       let totalMatrixVal = 0;
       let countMatrixFac = 0;
+      const seenMatrixFac = new Set();
 
-      const invoicesList = allRecords.filter(r => (r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && parseMoney(r.fac_val) > 0));
+      const invoicesList = allRecords.filter(r => isRecordCommitted(r) && ((r.step3_fac && String(r.step3_fac).trim()) || (r.fac_val && parseMoney(r.fac_val) > 0)));
 
       invoicesList.forEach((r, idx) => {
         const c = clientMap[r.client_id] || { name: r.client_name, resp: 'Edwar' };
         const fVal = parseMoney(r.fac_val);
-        totalMatrixVal += fVal;
-        countMatrixFac++;
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+
+        if (facKey) {
+          if (!seenMatrixFac.has(facKey)) {
+            seenMatrixFac.add(facKey);
+            totalMatrixVal += fVal;
+            countMatrixFac++;
+          }
+        } else {
+          totalMatrixVal += fVal;
+          countMatrixFac++;
+        }
 
         const tr = document.createElement("tr");
         tr.className = "hover:bg-purple-50/20 border-b border-slate-100 transition";
@@ -4453,8 +5504,8 @@
         const qColsHtml = MATRIX_COLS.map(col => {
           countsByCol[col.key].total++;
 
-          // Auto-reflect ALL matching records for this client, month and quarter
-          const matchingRecords = allRecords.filter(r => r.client_id === c.id && r.month === col.month && (r.period_detail.includes(col.period) || r.period_detail === 'Mes Completo'));
+          // Auto-reflect ALL matching records for this client, month and quarter (solo confirmados)
+          const matchingRecords = allRecords.filter(r => isRecordCommitted(r) && r.client_id === c.id && r.month === col.month && (r.period_detail.includes(col.period) || r.period_detail === 'Mes Completo'));
           
           let cell = (matrixData[c.id] && matrixData[c.id][col.key]) ? matrixData[c.id][col.key] : null;
           let currentStatus = cell ? cell.status : "PENDIENTE";
@@ -5252,19 +6303,30 @@
 
     function updateKPIs() {
       let done = 0, waiting = 0, totalPref = 0, totalFac = 0;
-      allRecords.forEach(r => {
+      const seenFac = new Set();
+      const committedRecs = allRecords.filter(r => isRecordCommitted(r));
+
+      committedRecs.forEach(r => {
         const st = computeRecordStatus(r);
         if (st.key === "COMPLETADO") done++;
         else if (st.key === "WAITING") waiting++;
         totalPref += parseMoney(r.pref_val);
-        totalFac += parseMoney(r.fac_val);
+        const facKey = (r.step3_fac || "").trim().toUpperCase();
+        if (facKey) {
+          if (!seenFac.has(facKey)) {
+            seenFac.add(facKey);
+            totalFac += parseMoney(r.fac_val);
+          }
+        } else if (parseMoney(r.fac_val) > 0) {
+          totalFac += parseMoney(r.fac_val);
+        }
       });
 
       const clientList = allClients.length > 0 ? allClients : CLIENTS_MASTER;
       const kpiClients = document.getElementById("kpiTotalClients");
       if (kpiClients) kpiClients.innerText = clientList.length;
       const kpiRecs = document.getElementById("kpiTotalRecords");
-      if (kpiRecs) kpiRecs.innerText = allRecords.length;
+      if (kpiRecs) kpiRecs.innerText = committedRecs.length;
       const checkTitle = document.getElementById("tabNavChecklistTitle");
       if (checkTitle) checkTitle.innerText = `Checklist Global (${clientList.length})`;
 
